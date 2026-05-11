@@ -21,26 +21,10 @@ export const authResolvers = {
   Mutation: {
     login: async (_: any, { email, password }: any, context: any) => {
       const result = await authService.login(email, password);
-      if (context.res && result.token) {
-        context.res.cookie('auth_token', result.token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'strict',
-          maxAge: 7 * 24 * 60 * 60 * 1000
-        });
-      }
       return result;
     },
     register: async (_: any, { email, password, displayName }: any, context: any) => {
       const result = await authService.register(email, password, displayName);
-      if (context.res && result.token) {
-        context.res.cookie('auth_token', result.token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'strict',
-          maxAge: 7 * 24 * 60 * 60 * 1000
-        });
-      }
       return result;
     },
     createStaff: async (_: any, { email, password, displayName }: any, context: any) => {

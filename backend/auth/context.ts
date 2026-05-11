@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { verifyToken, extractTokenFromCookie, AuthUser } from './jwt';
+import { verifyToken, extractTokenFromHeader, AuthUser } from './jwt';
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -22,8 +22,8 @@ export interface Context {
 }
 
 export async function createContext(req: any, res?: any): Promise<Context> {
-  const cookieHeader = req.headers.cookie;
-  const token = extractTokenFromCookie(cookieHeader);
+  const authHeader = req.headers.authorization;
+  const token = extractTokenFromHeader(authHeader);
 
   if (!token) {
     return { user: null, supabase, res };

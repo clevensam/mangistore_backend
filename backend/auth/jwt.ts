@@ -35,3 +35,9 @@ export function extractTokenFromCookie(cookieHeader: string | undefined): string
   const match = cookieHeader.match(/auth_token=([^;]+)/);
   return match ? match[1] : null;
 }
+
+export function extractTokenFromHeader(authHeader: string | undefined): string | null {
+  if (!authHeader) return null;
+  const match = authHeader.match(/Bearer\s+(.+)/);
+  return match ? match[1] : null;
+}
