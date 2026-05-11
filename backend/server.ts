@@ -20,8 +20,6 @@ import { errorHandler } from "./middleware/errorHandler";
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
-app.use(cookieParser());
-
 const loginRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
@@ -30,13 +28,13 @@ const loginRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-app.use("/graphql", loginRateLimiter);
-
-app.use(bodyParser.json());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  origin: process.env.FRONTEND_URL,
   credentials: true
 }));
+app.use(cookieParser());
+app.use("/graphql", loginRateLimiter);
+app.use(bodyParser.json());
 
 const resolvers = {
   Query: {
