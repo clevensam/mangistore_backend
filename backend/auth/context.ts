@@ -32,7 +32,7 @@ export async function createContext(req: any, res?: any): Promise<Context> {
   try {
     const payload = verifyToken(token);
     const { data: user } = await supabase
-      .from('admin_users')
+      .from('users')
       .select('*')
       .eq('id', payload.userId)
       .single();

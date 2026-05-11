@@ -7,23 +7,26 @@ export interface ProductInput {
   selling_price: number;
   quantity: number;
   low_stock_threshold: number;
+  owner_id: string;
 }
 
 export class ProductRepository {
-  async getAll() {
+  async getAll(ownerId: string) {
     const { data, error } = await supabase
       .from('products')
       .select('*')
+      .eq('owner_id', ownerId)
       .order('name');
     if (error) throw error;
     return data;
   }
 
-  async getById(id: string) {
+  async getById(id: string, ownerId: string) {
     const { data, error } = await supabase
       .from('products')
       .select('*')
       .eq('id', id)
+      .eq('owner_id', ownerId)
       .single();
     if (error) throw error;
     return data;
@@ -39,78 +42,92 @@ export class ProductRepository {
     return data;
   }
 
-  async update(id: string, updates: Partial<ProductInput>) {
+  async update(id: string, ownerId: string, updates: Partial<ProductInput>) {
     const { data, error } = await supabase
       .from('products')
       .update(updates)
       .eq('id', id)
+      .eq('owner_id', ownerId)
       .select()
       .single();
     if (error) throw error;
     return data;
   }
 
-  async delete(id: string) {
+  async delete(id: string, ownerId: string) {
     const { error } = await supabase
       .from('products')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('owner_id', ownerId);
     if (error) throw error;
     return true;
   }
 
-  async updateQuantity(id: string, quantity: number) {
-    const product = await this.getById(id);
+  async updateQuantity(id: string, ownerId: string, quantity: number) {
+    const product = await this.getById(id, ownerId);
     if (product) {
-      await this.update(id, { quantity: product.quantity + quantity });
+      await this.update(id, ownerId, { quantity: product.quantity + quantity });
     }
   }
 
-  async decrementQuantity(id: string, quantity: number) {
-    const { error } = await supabase.rpc('decrement_product_quantity', {
-      product_id: id,
-      decrement_amount: quantity
-    });
+  async decrementQuantity(id: string, ownerId: string, quantity: number) {
+    const product = await this.getById(id, ownerId);
+    if (!product) throw new Error('Product not found');
+    
+    if (product.quantity < quantity) {
+      throw new Error(`INSUFFICIENT_STOCK:${product.quantity}`);
+    }
+
+    const { error } = await supabase
+      .from('products')
+      .update({ quantity: product.quantity - quantity })
+      .eq('id', id)
+      .eq('owner_id', ownerId);
+    
     if (error) throw error;
     return true;
   }
 }
 
 export class SaleRepository {
-  async getAll() {
+  async getAll(ownerId: string) {
     const { data, error } = await supabase
       .from('sales')
       .select('*')
+      .eq('owner_id', ownerId)
       .order('created_at', { ascending: false });
     if (error) throw error;
     return data;
   }
 
-  async getByProductId(productId: string) {
+  async getByProductId(productId: string, ownerId: string) {
     const { data, error } = await supabase
       .from('sales')
       .select('*')
       .eq('product_id', productId)
+      .eq('owner_id', ownerId)
       .order('created_at', { ascending: false });
     if (error) throw error;
     return data;
   }
 
-  async create(sale: { product_id: string; quantity: number; total_price: number }) {
+  async create(ownerId: string, sale: { product_id: string; quantity: number; total_price: number }) {
     const { data, error } = await supabase
       .from('sales')
-      .insert([sale])
+      .insert([{ ...sale, owner_id: ownerId }])
       .select()
       .single();
     if (error) throw error;
     return data;
   }
 
-  async recordSale(productId: string, quantity: number, totalPrice: number) {
+  async recordSale(ownerId: string, productId: string, quantity: number, totalPrice: number) {
     const { data: product, error: productError } = await supabase
       .from('products')
       .select('id, name, quantity')
       .eq('id', productId)
+      .eq('owner_id', ownerId)
       .single();
 
     if (productError) {
@@ -130,7 +147,8 @@ export class SaleRepository {
       .insert([{
         product_id: productId,
         quantity,
-        total_price: totalPrice
+        total_price: totalPrice,
+        owner_id: ownerId
       }])
       .select()
       .single();
@@ -142,7 +160,8 @@ export class SaleRepository {
     const { error: updateError } = await supabase
       .from('products')
       .update({ quantity: product.quantity - quantity })
-      .eq('id', productId);
+      .eq('id', productId)
+      .eq('owner_id', ownerId);
 
     if (updateError) {
       throw new Error('STOCK_UPDATE_FAILED');
@@ -161,22 +180,25 @@ export interface OperatingExpenseInput {
   amount: number;
   expense_date: string;
   status: string;
+  owner_id: string;
 }
 
 export class OperatingExpenseRepository {
-  async getAll() {
+  async getAll(ownerId: string) {
     const { data, error } = await supabase
       .from('operating_expenses')
       .select('*')
+      .eq('owner_id', ownerId)
       .order('expense_date', { ascending: false });
     if (error) throw error;
     return data;
   }
 
-  async getByCategory(category: string) {
+  async getByCategory(ownerId: string, category: string) {
     const { data, error } = await supabase
       .from('operating_expenses')
       .select('*')
+      .eq('owner_id', ownerId)
       .eq('category', category)
       .order('expense_date', { ascending: false });
     if (error) throw error;
@@ -196,7 +218,7 @@ export class OperatingExpenseRepository {
     return data;
   }
 
-  async update(id: string, updates: Partial<OperatingExpenseInput>) {
+  async update(id: string, ownerId: string, updates: Partial<OperatingExpenseInput>) {
     const { data, error } = await supabase
       .from('operating_expenses')
       .update({
@@ -204,25 +226,28 @@ export class OperatingExpenseRepository {
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
+      .eq('owner_id', ownerId)
       .select()
       .single();
     if (error) throw error;
     return data;
   }
 
-  async delete(id: string) {
+  async delete(id: string, ownerId: string) {
     const { error } = await supabase
       .from('operating_expenses')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('owner_id', ownerId);
     if (error) throw error;
     return true;
   }
 
-  async getTotalByCategory() {
+  async getTotalByCategory(ownerId: string) {
     const { data, error } = await supabase
       .from('operating_expenses')
-      .select('category, amount');
+      .select('category, amount')
+      .eq('owner_id', ownerId);
     if (error) throw error;
     
     const totals: Record<string, number> = {};
@@ -232,7 +257,7 @@ export class OperatingExpenseRepository {
     return totals;
   }
 
-  async getMonthlyTotal(year: number, month: number) {
+  async getMonthlyTotal(ownerId: string, year: number, month: number) {
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
     const endDate = month === 12 
       ? `${year + 1}-01-01`
@@ -241,6 +266,7 @@ export class OperatingExpenseRepository {
     const { data, error } = await supabase
       .from('operating_expenses')
       .select('amount')
+      .eq('owner_id', ownerId)
       .gte('expense_date', startDate)
       .lt('expense_date', endDate);
     if (error) throw error;

@@ -7,13 +7,15 @@ export interface DebtInput {
   amount: number;
   due_date: string;
   description?: string;
+  owner_id: string;
 }
 
 export class DebtRepository {
-  async getAll(type?: string) {
+  async getAll(ownerId: string, type?: string) {
     let query = supabase
       .from('debts')
       .select('*, customer:customers(*)')
+      .eq('owner_id', ownerId)
       .order('due_date', { ascending: true });
 
     if (type) {
@@ -25,11 +27,12 @@ export class DebtRepository {
     return data;
   }
 
-  async getById(id: string) {
+  async getById(id: string, ownerId: string) {
     const { data, error } = await supabase
       .from('debts')
       .select('*, customer:customers(*)')
       .eq('id', id)
+      .eq('owner_id', ownerId)
       .single();
     if (error) throw error;
     return data;
@@ -49,7 +52,7 @@ export class DebtRepository {
     return data;
   }
 
-  async updatePayment(debtId: string, amountPaid: number, newStatus: 'partial' | 'paid') {
+  async updatePayment(debtId: string, ownerId: string, amountPaid: number, newStatus: 'partial' | 'paid') {
     const { data, error } = await supabase
       .from('debts')
       .update({
@@ -58,37 +61,40 @@ export class DebtRepository {
         updated_at: new Date().toISOString()
       })
       .eq('id', debtId)
+      .eq('owner_id', ownerId)
       .select()
       .single();
     if (error) throw error;
     return data;
   }
 
-  async delete(id: string) {
+  async delete(id: string, ownerId: string) {
     const { error } = await supabase
       .from('debts')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('owner_id', ownerId);
     if (error) throw error;
     return true;
   }
 }
 
 export class DebtPaymentRepository {
-  async getByDebtId(debtId: string) {
+  async getByDebtId(debtId: string, ownerId: string) {
     const { data, error } = await supabase
       .from('debt_payments')
       .select('*')
       .eq('debt_id', debtId)
+      .eq('owner_id', ownerId)
       .order('payment_date', { ascending: false });
     if (error) throw error;
     return data;
   }
 
-  async create(payment: { debt_id: string; amount: number; notes?: string }) {
+  async create(ownerId: string, payment: { debt_id: string; amount: number; notes?: string }) {
     const { data, error } = await supabase
       .from('debt_payments')
-      .insert([payment])
+      .insert([{ ...payment, owner_id: ownerId }])
       .select()
       .single();
     if (error) throw error;

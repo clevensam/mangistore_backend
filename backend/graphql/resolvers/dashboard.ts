@@ -1,4 +1,5 @@
 import { productRepository, saleRepository } from '../../repositories';
+import { requireAuth } from '../../auth/context';
 
 interface Product {
   id: string;
@@ -20,9 +21,10 @@ interface Sale {
 
 export const dashboardResolvers = {
   Query: {
-    dashboardData: async () => {
-      const products = await productRepository.getAll();
-      const sales = await saleRepository.getAll();
+    dashboardData: async (_: any, __: any, context: any) => {
+      const user = requireAuth(context);
+      const products = await productRepository.getAll(user.id);
+      const sales = await saleRepository.getAll(user.id);
 
       const productMap = new Map<string, Product>(products.map((p: Product) => [p.id, p]));
 

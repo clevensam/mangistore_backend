@@ -1,4 +1,5 @@
 import { productRepository, saleRepository } from '../../repositories';
+import { requireAuth } from '../../auth/context';
 
 interface Product {
   id: string;
@@ -20,9 +21,10 @@ interface Sale {
 
 export const analysisResolvers = {
   Query: {
-    salesAnalysis: async (_: any, { startDate, endDate }: any) => {
-      const products = await productRepository.getAll();
-      const sales = await saleRepository.getAll();
+    salesAnalysis: async (_: any, { startDate, endDate }: any, context: any) => {
+      const user = requireAuth(context);
+      const products = await productRepository.getAll(user.id);
+      const sales = await saleRepository.getAll(user.id);
 
       const productMap = new Map<string, Product>(products.map((p: Product) => [p.id, p]));
 
@@ -61,9 +63,10 @@ export const analysisResolvers = {
       };
     },
 
-    deadStockAnalysis: async (_: any, { startDate, endDate }: any) => {
-      const products = await productRepository.getAll();
-      const sales = await saleRepository.getAll();
+    deadStockAnalysis: async (_: any, { startDate, endDate }: any, context: any) => {
+      const user = requireAuth(context);
+      const products = await productRepository.getAll(user.id);
+      const sales = await saleRepository.getAll(user.id);
 
       const productSalesMap = new Map<string, Sale[]>();
       sales.forEach((s: Sale) => {
@@ -122,9 +125,10 @@ export const analysisResolvers = {
       return deadStock.sort((a, b) => (b.daysSinceLastSale || 0) - (a.daysSinceLastSale || 0));
     },
 
-    profitabilityAnalysis: async (_: any, { startDate, endDate }: any) => {
-      const products = await productRepository.getAll();
-      const sales = await saleRepository.getAll();
+    profitabilityAnalysis: async (_: any, { startDate, endDate }: any, context: any) => {
+      const user = requireAuth(context);
+      const products = await productRepository.getAll(user.id);
+      const sales = await saleRepository.getAll(user.id);
 
       const productMap = new Map<string, Product>(products.map((p: Product) => [p.id, p]));
 
@@ -180,8 +184,9 @@ export const analysisResolvers = {
       return profitability.sort((a, b) => b.profit - a.profit);
     },
 
-    inventoryHealth: async () => {
-      const products = await productRepository.getAll();
+    inventoryHealth: async (_: any, __: any, context: any) => {
+      const user = requireAuth(context);
+      const products = await productRepository.getAll(user.id);
 
       const lowStock: any[] = [];
       const overstocked: any[] = [];
@@ -232,9 +237,10 @@ export const analysisResolvers = {
       };
     },
 
-    businessInsights: async (_: any, { startDate, endDate }: any) => {
-      const products = await productRepository.getAll();
-      const sales = await saleRepository.getAll();
+    businessInsights: async (_: any, { startDate, endDate }: any, context: any) => {
+      const user = requireAuth(context);
+      const products = await productRepository.getAll(user.id);
+      const sales = await saleRepository.getAll(user.id);
 
       const productMap = new Map<string, Product>(products.map((p: Product) => [p.id, p]));
 

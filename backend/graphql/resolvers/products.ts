@@ -1,9 +1,11 @@
 import { productRepository, saleRepository } from '../../repositories';
+import { requireAuth } from '../../auth/context';
 
 export const productResolvers = {
   Query: {
-    products: async () => {
-      const products = await productRepository.getAll();
+    products: async (_: any, __: any, context: any) => {
+      const user = requireAuth(context);
+      const products = await productRepository.getAll(user.id);
       return products.map(p => ({
         id: p.id,
         name: p.name,
@@ -15,8 +17,9 @@ export const productResolvers = {
         created_at: p.created_at
       }));
     },
-    sales: async (_: any, { startDate, endDate }: any) => {
-      const sales = await saleRepository.getAll();
+    sales: async (_: any, { startDate, endDate }: any, context: any) => {
+      const user = requireAuth(context);
+      const sales = await saleRepository.getAll(user.id);
       let filtered = sales;
       
       if (startDate || endDate) {
@@ -39,8 +42,9 @@ export const productResolvers = {
         created_at: s.created_at
       }));
     },
-    product: async (_: any, { id }: any) => {
-      const p = await productRepository.getById(id);
+    product: async (_: any, { id }: any, context: any) => {
+      const user = requireAuth(context);
+      const p = await productRepository.getById(id, user.id);
       if (!p) return null;
       return {
         id: p.id,
@@ -53,8 +57,9 @@ export const productResolvers = {
         created_at: p.created_at
       };
     },
-    productSales: async (_: any, { productId }: any) => {
-      const sales = await saleRepository.getByProductId(productId);
+    productSales: async (_: any, { productId }: any, context: any) => {
+      const user = requireAuth(context);
+      const sales = await saleRepository.getByProductId(productId, user.id);
       return sales.map(s => ({
         id: s.id,
         product_id: s.product_id,
@@ -65,12 +70,13 @@ export const productResolvers = {
     }
   },
   Mutation: {
-    createProduct: async (_: any, args: any) => {
+    createProduct: async (_: any, args: any, context: any) => {
+      const user = requireAuth(context);
       const { buying_price, selling_price } = args;
       if (selling_price !== undefined && buying_price !== undefined && selling_price <= buying_price) {
         throw new Error('Selling price must be greater than buying price');
       }
-      const product = await productRepository.create(args);
+      const product = await productRepository.create({ ...args, owner_id: user.id });
       return {
         id: product.id,
         name: product.name,
@@ -82,12 +88,13 @@ export const productResolvers = {
         created_at: product.created_at
       };
     },
-    updateProduct: async (_: any, { id, ...updates }: any) => {
+    updateProduct: async (_: any, { id, ...updates }: any, context: any) => {
+      const user = requireAuth(context);
       const { buying_price, selling_price } = updates;
       if (selling_price !== undefined && buying_price !== undefined && selling_price <= buying_price) {
         throw new Error('Selling price must be greater than buying price');
       }
-      const product = await productRepository.update(id, updates);
+      const product = await productRepository.update(id, user.id, updates);
       return {
         id: product.id,
         name: product.name,
@@ -99,9 +106,10 @@ export const productResolvers = {
         created_at: product.created_at
       };
     },
-    deleteProduct: async (_: any, { id }: any) => {
+    deleteProduct: async (_: any, { id }: any, context: any) => {
+      const user = requireAuth(context);
       try {
-        return await productRepository.delete(id);
+        return await productRepository.delete(id, user.id);
       } catch (error: any) {
         const errorCode = error?.code || error?.message || '';
         if (errorCode === '23503' || String(errorCode).includes('23503')) {
@@ -110,9 +118,10 @@ export const productResolvers = {
         throw error;
       }
     },
-    recordSale: async (_: any, { productId, quantity, totalPrice }: any) => {
+    recordSale: async (_: any, { productId, quantity, totalPrice }: any, context: any) => {
+      const user = requireAuth(context);
       try {
-        const sale = await saleRepository.recordSale(productId, quantity, totalPrice);
+        const sale = await saleRepository.recordSale(user.id, productId, quantity, totalPrice);
         return {
           id: sale.id,
           product_id: sale.product_id,

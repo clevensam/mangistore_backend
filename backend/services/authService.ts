@@ -13,7 +13,7 @@ export class AuthService {
     const passwordHash = await hashPassword(password);
 
     const { data: user, error } = await supabase
-      .from('admin_users')
+      .from('users')
       .insert([
         {
           email,
@@ -35,7 +35,7 @@ export class AuthService {
 
   async login(email: string, password: string): Promise<AuthPayload> {
     const { data: user, error } = await supabase
-      .from('admin_users')
+      .from('users')
       .select('*')
       .eq('email', email)
       .single();
@@ -65,7 +65,7 @@ export class AuthService {
     const passwordHash = await hashPassword(password);
 
     const { data: user, error } = await supabase
-      .from('admin_users')
+      .from('users')
       .insert([
         {
           email,
@@ -87,7 +87,7 @@ export class AuthService {
 
   async findUserByEmail(email: string) {
     const { data } = await supabase
-      .from('admin_users')
+      .from('users')
       .select('*')
       .eq('email', email)
       .single();
@@ -96,7 +96,7 @@ export class AuthService {
 
   async getUserById(id: string) {
     const { data } = await supabase
-      .from('admin_users')
+      .from('users')
       .select('*')
       .eq('id', id)
       .single();

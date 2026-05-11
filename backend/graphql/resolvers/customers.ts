@@ -1,9 +1,11 @@
 import { customerRepository } from '../../repositories/customerRepo';
+import { requireAuth } from '../../auth/context';
 
 export const customerResolvers = {
   Query: {
-    customers: async () => {
-      const customers = await customerRepository.getAll();
+    customers: async (_: any, __: any, context: any) => {
+      const user = requireAuth(context);
+      const customers = await customerRepository.getAll(user.id);
       return customers.map(c => ({
         id: c.id,
         name: c.name,
@@ -14,8 +16,9 @@ export const customerResolvers = {
         createdAt: c.created_at
       }));
     },
-    customer: async (_: any, { id }: any) => {
-      const c = await customerRepository.getById(id);
+    customer: async (_: any, { id }: any, context: any) => {
+      const user = requireAuth(context);
+      const c = await customerRepository.getById(id, user.id);
       if (!c) return null;
       return {
         id: c.id,
@@ -29,8 +32,9 @@ export const customerResolvers = {
     }
   },
   Mutation: {
-    createCustomer: async (_: any, { name, phone, email, address }: any) => {
-      const customer = await customerRepository.create({ name, phone, email, address });
+    createCustomer: async (_: any, { name, phone, email, address }: any, context: any) => {
+      const user = requireAuth(context);
+      const customer = await customerRepository.create({ name, phone, email, address, owner_id: user.id });
       return {
         id: customer.id,
         name: customer.name,
@@ -41,8 +45,9 @@ export const customerResolvers = {
         createdAt: customer.created_at
       };
     },
-    updateCustomer: async (_: any, { id, name, phone, email, address, status }: any) => {
-      const customer = await customerRepository.update(id, { name, phone, email, address, status });
+    updateCustomer: async (_: any, { id, name, phone, email, address, status }: any, context: any) => {
+      const user = requireAuth(context);
+      const customer = await customerRepository.update(id, user.id, { name, phone, email, address, status });
       return {
         id: customer.id,
         name: customer.name,
@@ -53,8 +58,9 @@ export const customerResolvers = {
         createdAt: customer.created_at
       };
     },
-    deleteCustomer: async (_: any, { id }: any) => {
-      return await customerRepository.delete(id);
+    deleteCustomer: async (_: any, { id }: any, context: any) => {
+      const user = requireAuth(context);
+      return await customerRepository.delete(id, user.id);
     }
   }
 };
