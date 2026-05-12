@@ -1,24 +1,6 @@
 import { productRepository, saleRepository } from '../../repositories';
 import { requireAuth } from '../../auth/context';
 
-interface Product {
-  id: string;
-  name: string;
-  category: string;
-  buying_price: number;
-  selling_price: number;
-  quantity: number;
-  low_stock_threshold: number;
-}
-
-interface Sale {
-  id: string;
-  product_id: string;
-  quantity: number;
-  total_price: number;
-  created_at: string;
-}
-
 export const dashboardResolvers = {
   Query: {
     dashboardData: async (_: any, __: any, context: any) => {
@@ -26,7 +8,7 @@ export const dashboardResolvers = {
       const products = await productRepository.getAll(user.id);
       const sales = await saleRepository.getAll(user.id);
 
-      const productMap = new Map<string, Product>(products.map((p: Product) => [p.id, p]));
+      const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
 
       const today = new Date().toISOString().split('T')[0];
       const todayStart = new Date(today);
@@ -34,17 +16,17 @@ export const dashboardResolvers = {
       const todayEnd = new Date(today);
       todayEnd.setHours(23, 59, 59, 999);
 
-      const todaySales = sales.filter((s: Sale) => {
+      const todaySales = sales.filter((s: any) => {
         const saleDate = new Date(s.created_at);
         return saleDate >= todayStart && saleDate <= todayEnd;
       });
 
-      const todaySalesTotal = todaySales.reduce((sum: number, s: Sale) => sum + s.total_price, 0);
+      const todaySalesTotal = todaySales.reduce((sum: number, s: any) => sum + s.total_price, 0);
       const todayOrderCount = todaySales.length;
 
-      const lowStockCount = products.filter((p: Product) => p.quantity <= p.low_stock_threshold && p.quantity > 0).length;
-      
-      const inventoryValue = products.reduce((sum: number, p: Product) => {
+      const lowStockCount = products.filter((p: any) => p.quantity <= p.low_stock_threshold && p.quantity > 0).length;
+
+      const inventoryValue = products.reduce((sum: number, p: any) => {
         return sum + (p.buying_price || 0) * p.quantity;
       }, 0);
 
@@ -58,13 +40,13 @@ export const dashboardResolvers = {
         const dayEnd = new Date(dateStr);
         dayEnd.setHours(23, 59, 59, 999);
 
-        const daySales = sales.filter((s: Sale) => {
+        const daySales = sales.filter((s: any) => {
           const saleDate = new Date(s.created_at);
           return saleDate >= dayStart && saleDate <= dayEnd;
         });
 
-        const dayTotal = daySales.reduce((sum: number, s: Sale) => sum + s.total_price, 0);
-        
+        const dayTotal = daySales.reduce((sum: number, s: any) => sum + s.total_price, 0);
+
         last7Days.push({
           date: date.toLocaleDateString('en-US', { weekday: 'short' }),
           total: dayTotal
@@ -75,14 +57,14 @@ export const dashboardResolvers = {
       last7DaysStart.setDate(last7DaysStart.getDate() - 7);
       last7DaysStart.setHours(0, 0, 0, 0);
 
-      const recentPeriodSales = sales.filter((s: Sale) => new Date(s.created_at) >= last7DaysStart);
+      const recentPeriodSales = sales.filter((s: any) => new Date(s.created_at) >= last7DaysStart);
 
       const productRevenue = new Map<string, { revenue: number; quantity: number; name: string }>();
-      
-      recentPeriodSales.forEach((s: Sale) => {
+
+      recentPeriodSales.forEach((s: any) => {
         const product = productMap.get(s.product_id);
         if (!product) return;
-        
+
         const existing = productRevenue.get(s.product_id) || { revenue: 0, quantity: 0, name: product.name };
         existing.revenue += s.total_price;
         existing.quantity += s.quantity;
@@ -100,9 +82,9 @@ export const dashboardResolvers = {
         .slice(0, 5);
 
       const recentTransactions = sales
-        .sort((a: Sale, b: Sale) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, 5)
-        .map((s: Sale) => {
+        .map((s: any) => {
           const product = productMap.get(s.product_id);
           return {
             id: s.id,
@@ -110,18 +92,18 @@ export const dashboardResolvers = {
             productName: product?.name || 'Unknown',
             quantity: s.quantity,
             totalPrice: s.total_price,
-            createdAt: s.created_at
+            createdAt: s.created_at?.toISOString?.() || s.created_at
           };
         });
 
       const lowStockProducts = products
-        .filter((p: Product) => p.quantity <= p.low_stock_threshold && p.quantity > 0)
-        .map((p: Product) => ({
+        .filter((p: any) => p.quantity <= p.low_stock_threshold && p.quantity > 0)
+        .map((p: any) => ({
           productId: p.id,
           productName: p.name,
           quantity: p.quantity,
           threshold: p.low_stock_threshold,
-          category: p.category
+          category: p.category || ''
         }))
         .slice(0, 5);
 

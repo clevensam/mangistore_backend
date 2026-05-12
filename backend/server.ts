@@ -1,11 +1,10 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import cookieParser from "cookie-parser";
-import rateLimit from "express-rate-limit";
 import { ApolloServer } from "@apollo/server";
 import { expressMiddleware } from "@as-integrations/express4";
 import bodyParser from "body-parser";
+import prisma from "./prisma";
 import { typeDefs } from "./graphql/typeDefs";
 import { authResolvers } from "./graphql/resolvers/auth";
 import { productResolvers } from "./graphql/resolvers/products";
@@ -20,20 +19,10 @@ import { errorHandler } from "./middleware/errorHandler";
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
-const loginRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  message: { error: "Too many login attempts, please try again later" },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
 app.use(cors({
   origin: process.env.FRONTEND_URL,
   credentials: true
 }));
-app.use(cookieParser());
-app.use("/graphql", loginRateLimiter);
 app.use(bodyParser.json());
 
 const resolvers = {
@@ -75,15 +64,6 @@ async function startServer() {
     res.json({ status: "ok", message: "Server is running with GraphQL API" });
   });
 
-  app.post("/api/auth/logout", (req, res) => {
-    res.clearCookie("auth_token", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict"
-    });
-    res.json({ success: true });
-  });
-
   app.use(errorHandler);
 
   app.listen(PORT, "0.0.0.0", () => {
@@ -91,4 +71,14 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer()
+  .catch(async (e) => {
+    console.error('Failed to start server:', e);
+    await prisma.$disconnect();
+    process.exit(1);
+  });
+
+process.on('SIGINT', async () => {
+  await prisma.$disconnect();
+  process.exit(0);
+});

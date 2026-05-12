@@ -20,9 +20,9 @@ export const debtResolvers = {
           createdAt: d.customer.created_at
         } : null,
         supplierName: d.supplier_name || '',
-        amount: parseFloat(d.amount) || 0,
-        amountPaid: parseFloat(d.amount_paid) || 0,
-        remaining: parseFloat(d.amount) - parseFloat(d.amount_paid),
+        amount: Number(d.amount) || 0,
+        amountPaid: Number(d.amount_paid) || 0,
+        remaining: Number(d.amount) - Number(d.amount_paid),
         dueDate: d.due_date,
         status: d.status,
         description: d.description || '',
@@ -48,9 +48,9 @@ export const debtResolvers = {
           createdAt: d.customer.created_at
         } : null,
         supplierName: d.supplier_name || '',
-        amount: parseFloat(d.amount) || 0,
-        amountPaid: parseFloat(d.amount_paid) || 0,
-        remaining: parseFloat(d.amount) - parseFloat(d.amount_paid),
+        amount: Number(d.amount) || 0,
+        amountPaid: Number(d.amount_paid) || 0,
+        remaining: Number(d.amount) - Number(d.amount_paid),
         dueDate: d.due_date,
         status: d.status,
         description: d.description || '',
@@ -64,7 +64,7 @@ export const debtResolvers = {
       return payments.map(p => ({
         id: p.id,
         debtId: p.debt_id,
-        amount: parseFloat(p.amount) || 0,
+        amount: Number(p.amount) || 0,
         paymentDate: p.payment_date,
         notes: p.notes || ''
       }));
@@ -89,9 +89,9 @@ export const debtResolvers = {
         customerId: debt.customer_id || null,
         customer: null,
         supplierName: debt.supplier_name || '',
-        amount: parseFloat(debt.amount) || 0,
+        amount: Number(debt.amount) || 0,
         amountPaid: 0,
-        remaining: parseFloat(debt.amount) || 0,
+        remaining: Number(debt.amount) || 0,
         dueDate: debt.due_date,
         status: debt.status,
         description: debt.description || '',
@@ -110,8 +110,8 @@ export const debtResolvers = {
         notes
       });
 
-      const newAmountPaid = parseFloat(debt.amount_paid) + amount;
-      const remaining = parseFloat(debt.amount) - newAmountPaid;
+      const newAmountPaid = Number(debt.amount_paid) + amount;
+      const remaining = Number(debt.amount) - newAmountPaid;
       const newStatus = remaining <= 0 ? 'paid' : 'partial';
 
       const updatedDebt = await debtRepository.updatePayment(debtId, user.id, newAmountPaid, newStatus);
@@ -130,7 +130,7 @@ export const debtResolvers = {
           createdAt: updatedDebt.customer.created_at
         } : null,
         supplierName: updatedDebt.supplier_name || '',
-        amount: parseFloat(updatedDebt.amount) || 0,
+        amount: Number(updatedDebt.amount) || 0,
         amountPaid: newAmountPaid,
         remaining: remaining > 0 ? remaining : 0,
         dueDate: updatedDebt.due_date,
@@ -145,7 +145,7 @@ export const debtResolvers = {
       const debt = await debtRepository.getById(id, user.id);
       if (!debt) throw new Error('Debt not found');
 
-      const updatedDebt = await debtRepository.updatePayment(id, user.id, parseFloat(debt.amount), 'paid');
+      const updatedDebt = await debtRepository.updatePayment(id, user.id, Number(debt.amount), 'paid');
 
       return {
         id: updatedDebt.id,
@@ -161,8 +161,8 @@ export const debtResolvers = {
           createdAt: updatedDebt.customer.created_at
         } : null,
         supplierName: updatedDebt.supplier_name || '',
-        amount: parseFloat(updatedDebt.amount) || 0,
-        amountPaid: parseFloat(updatedDebt.amount) || 0,
+        amount: Number(updatedDebt.amount) || 0,
+        amountPaid: Number(updatedDebt.amount) || 0,
         remaining: 0,
         dueDate: updatedDebt.due_date,
         status: 'paid',

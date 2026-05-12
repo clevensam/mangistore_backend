@@ -1,4 +1,4 @@
-import { supabase } from '../auth/context';
+import prisma from '../prisma';
 
 export interface DebtInput {
   type: 'payable' | 'receivable';
@@ -12,93 +12,75 @@ export interface DebtInput {
 
 export class DebtRepository {
   async getAll(ownerId: string, type?: string) {
-    let query = supabase
-      .from('debts')
-      .select('*, customer:customers(*)')
-      .eq('owner_id', ownerId)
-      .order('due_date', { ascending: true });
-
+    const where: any = { owner_id: ownerId };
     if (type) {
-      query = query.eq('type', type);
+      where.type = type;
     }
 
-    const { data, error } = await query;
-    if (error) throw error;
-    return data;
+    return prisma.debt.findMany({
+      where,
+      include: { customer: true },
+      orderBy: { due_date: 'asc' }
+    });
   }
 
   async getById(id: string, ownerId: string) {
-    const { data, error } = await supabase
-      .from('debts')
-      .select('*, customer:customers(*)')
-      .eq('id', id)
-      .eq('owner_id', ownerId)
-      .single();
-    if (error) throw error;
-    return data;
+    return prisma.debt.findFirst({
+      where: { id, owner_id: ownerId },
+      include: { customer: true }
+    });
   }
 
   async create(input: DebtInput) {
-    const { data, error } = await supabase
-      .from('debts')
-      .insert([{
-        ...input,
+    return prisma.debt.create({
+      data: {
+        type: input.type,
+        customer_id: input.customer_id || null,
+        supplier_name: input.supplier_name || null,
+        amount: input.amount,
         amount_paid: 0,
-        status: 'pending'
-      }])
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
+        due_date: new Date(input.due_date),
+        description: input.description || null,
+        status: 'pending',
+        owner_id: input.owner_id
+      }
+    });
   }
 
   async updatePayment(debtId: string, ownerId: string, amountPaid: number, newStatus: 'partial' | 'paid') {
-    const { data, error } = await supabase
-      .from('debts')
-      .update({
+    return prisma.debt.update({
+      where: { id: debtId },
+      data: {
         amount_paid: amountPaid,
-        status: newStatus,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', debtId)
-      .eq('owner_id', ownerId)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
+        status: newStatus
+      },
+      include: { customer: true }
+    });
   }
 
   async delete(id: string, ownerId: string) {
-    const { error } = await supabase
-      .from('debts')
-      .delete()
-      .eq('id', id)
-      .eq('owner_id', ownerId);
-    if (error) throw error;
+    await prisma.debt.delete({ where: { id } });
     return true;
   }
 }
 
 export class DebtPaymentRepository {
   async getByDebtId(debtId: string, ownerId: string) {
-    const { data, error } = await supabase
-      .from('debt_payments')
-      .select('*')
-      .eq('debt_id', debtId)
-      .eq('owner_id', ownerId)
-      .order('payment_date', { ascending: false });
-    if (error) throw error;
-    return data;
+    return prisma.debtPayment.findMany({
+      where: { debt_id: debtId, owner_id: ownerId },
+      orderBy: { payment_date: 'desc' }
+    });
   }
 
   async create(ownerId: string, payment: { debt_id: string; amount: number; notes?: string }) {
-    const { data, error } = await supabase
-      .from('debt_payments')
-      .insert([{ ...payment, owner_id: ownerId }])
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
+    return prisma.debtPayment.create({
+      data: {
+        debt_id: payment.debt_id,
+        amount: payment.amount,
+        notes: payment.notes || null,
+        owner_id: ownerId
+      }
+    });
   }
 }
 

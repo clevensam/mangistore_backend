@@ -1,4 +1,4 @@
-import { supabase } from '../auth/context';
+import prisma from '../prisma';
 
 export interface ProductInput {
   name: string;
@@ -12,125 +12,99 @@ export interface ProductInput {
 
 export class ProductRepository {
   async getAll(ownerId: string) {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('owner_id', ownerId)
-      .order('name');
-    if (error) throw error;
-    return data;
+    return prisma.product.findMany({
+      where: { owner_id: ownerId },
+      orderBy: { name: 'asc' }
+    });
   }
 
   async getById(id: string, ownerId: string) {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('id', id)
-      .eq('owner_id', ownerId)
-      .single();
-    if (error) throw error;
-    return data;
+    return prisma.product.findFirst({
+      where: { id, owner_id: ownerId }
+    });
   }
 
   async create(input: ProductInput) {
-    const { data, error } = await supabase
-      .from('products')
-      .insert([input])
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
+    return prisma.product.create({
+      data: {
+        name: input.name,
+        category: input.category,
+        buying_price: input.buying_price,
+        selling_price: input.selling_price,
+        quantity: input.quantity,
+        low_stock_threshold: input.low_stock_threshold,
+        owner_id: input.owner_id
+      }
+    });
   }
 
   async update(id: string, ownerId: string, updates: Partial<ProductInput>) {
-    const { data, error } = await supabase
-      .from('products')
-      .update(updates)
-      .eq('id', id)
-      .eq('owner_id', ownerId)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
+    return prisma.product.update({
+      where: { id },
+      data: updates
+    });
   }
 
   async delete(id: string, ownerId: string) {
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', id)
-      .eq('owner_id', ownerId);
-    if (error) throw error;
+    await prisma.product.delete({ where: { id } });
     return true;
   }
 
   async updateQuantity(id: string, ownerId: string, quantity: number) {
     const product = await this.getById(id, ownerId);
     if (product) {
-      await this.update(id, ownerId, { quantity: product.quantity + quantity });
+      await this.update(id, ownerId, { quantity: product.quantity + quantity } as any);
     }
   }
 
   async decrementQuantity(id: string, ownerId: string, quantity: number) {
     const product = await this.getById(id, ownerId);
     if (!product) throw new Error('Product not found');
-    
+
     if (product.quantity < quantity) {
       throw new Error(`INSUFFICIENT_STOCK:${product.quantity}`);
     }
 
-    const { error } = await supabase
-      .from('products')
-      .update({ quantity: product.quantity - quantity })
-      .eq('id', id)
-      .eq('owner_id', ownerId);
-    
-    if (error) throw error;
+    await prisma.product.update({
+      where: { id },
+      data: { quantity: product.quantity - quantity }
+    });
     return true;
   }
 }
 
 export class SaleRepository {
   async getAll(ownerId: string) {
-    const { data, error } = await supabase
-      .from('sales')
-      .select('*')
-      .eq('owner_id', ownerId)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return data;
+    return prisma.sale.findMany({
+      where: { owner_id: ownerId },
+      orderBy: { created_at: 'desc' }
+    });
   }
 
   async getByProductId(productId: string, ownerId: string) {
-    const { data, error } = await supabase
-      .from('sales')
-      .select('*')
-      .eq('product_id', productId)
-      .eq('owner_id', ownerId)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return data;
+    return prisma.sale.findMany({
+      where: { product_id: productId, owner_id: ownerId },
+      orderBy: { created_at: 'desc' }
+    });
   }
 
   async create(ownerId: string, sale: { product_id: string; quantity: number; total_price: number }) {
-    const { data, error } = await supabase
-      .from('sales')
-      .insert([{ ...sale, owner_id: ownerId }])
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
+    return prisma.sale.create({
+      data: {
+        product_id: sale.product_id,
+        quantity: sale.quantity,
+        total_price: sale.total_price,
+        owner_id: ownerId
+      }
+    });
   }
 
   async recordSale(ownerId: string, productId: string, quantity: number, totalPrice: number) {
-    const { data: product, error: productError } = await supabase
-      .from('products')
-      .select('id, name, quantity')
-      .eq('id', productId)
-      .eq('owner_id', ownerId)
-      .single();
+    const product = await prisma.product.findFirst({
+      where: { id: productId, owner_id: ownerId }
+    });
 
-    if (productError) {
+    if (!product) {
       throw new Error('PRODUCT_NOT_FOUND');
     }
 
@@ -142,30 +116,19 @@ export class SaleRepository {
       throw new Error('OUT_OF_STOCK');
     }
 
-    const { data: sale, error: saleError } = await supabase
-      .from('sales')
-      .insert([{
+    const sale = await prisma.sale.create({
+      data: {
         product_id: productId,
         quantity,
         total_price: totalPrice,
         owner_id: ownerId
-      }])
-      .select()
-      .single();
+      }
+    });
 
-    if (saleError) {
-      throw new Error('SALE_RECORD_FAILED');
-    }
-
-    const { error: updateError } = await supabase
-      .from('products')
-      .update({ quantity: product.quantity - quantity })
-      .eq('id', productId)
-      .eq('owner_id', ownerId);
-
-    if (updateError) {
-      throw new Error('STOCK_UPDATE_FAILED');
-    }
+    await prisma.product.update({
+      where: { id: productId },
+      data: { quantity: product.quantity - quantity }
+    });
 
     return sale;
   }
@@ -185,93 +148,76 @@ export interface OperatingExpenseInput {
 
 export class OperatingExpenseRepository {
   async getAll(ownerId: string) {
-    const { data, error } = await supabase
-      .from('operating_expenses')
-      .select('*')
-      .eq('owner_id', ownerId)
-      .order('expense_date', { ascending: false });
-    if (error) throw error;
-    return data;
+    return prisma.operatingExpense.findMany({
+      where: { owner_id: ownerId },
+      orderBy: { expense_date: 'desc' }
+    });
   }
 
   async getByCategory(ownerId: string, category: string) {
-    const { data, error } = await supabase
-      .from('operating_expenses')
-      .select('*')
-      .eq('owner_id', ownerId)
-      .eq('category', category)
-      .order('expense_date', { ascending: false });
-    if (error) throw error;
-    return data;
+    return prisma.operatingExpense.findMany({
+      where: { owner_id: ownerId, category },
+      orderBy: { expense_date: 'desc' }
+    });
   }
 
   async create(input: OperatingExpenseInput) {
-    const { data, error } = await supabase
-      .from('operating_expenses')
-      .insert([{
-        ...input,
-        updated_at: new Date().toISOString()
-      }])
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
+    return prisma.operatingExpense.create({
+      data: {
+        category: input.category,
+        description: input.description || null,
+        amount: input.amount,
+        expense_date: new Date(input.expense_date),
+        status: input.status,
+        owner_id: input.owner_id
+      }
+    });
   }
 
   async update(id: string, ownerId: string, updates: Partial<OperatingExpenseInput>) {
-    const { data, error } = await supabase
-      .from('operating_expenses')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id)
-      .eq('owner_id', ownerId)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
+    const data: any = { ...updates };
+    if (updates.expense_date) {
+      data.expense_date = new Date(updates.expense_date);
+    }
+    return prisma.operatingExpense.update({
+      where: { id },
+      data
+    });
   }
 
   async delete(id: string, ownerId: string) {
-    const { error } = await supabase
-      .from('operating_expenses')
-      .delete()
-      .eq('id', id)
-      .eq('owner_id', ownerId);
-    if (error) throw error;
+    await prisma.operatingExpense.delete({ where: { id } });
     return true;
   }
 
   async getTotalByCategory(ownerId: string) {
-    const { data, error } = await supabase
-      .from('operating_expenses')
-      .select('category, amount')
-      .eq('owner_id', ownerId);
-    if (error) throw error;
-    
+    const expenses = await prisma.operatingExpense.findMany({
+      where: { owner_id: ownerId },
+      select: { category: true, amount: true }
+    });
+
     const totals: Record<string, number> = {};
-    data?.forEach(item => {
+    expenses.forEach(item => {
       totals[item.category] = (totals[item.category] || 0) + Number(item.amount);
     });
     return totals;
   }
 
   async getMonthlyTotal(ownerId: string, year: number, month: number) {
-    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-    const endDate = month === 12 
-      ? `${year + 1}-01-01`
-      : `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = month === 12
+      ? new Date(year + 1, 0, 1)
+      : new Date(year, month, 1);
 
-    const { data, error } = await supabase
-      .from('operating_expenses')
-      .select('amount')
-      .eq('owner_id', ownerId)
-      .gte('expense_date', startDate)
-      .lt('expense_date', endDate);
-    if (error) throw error;
+    const expenses = await prisma.operatingExpense.findMany({
+      where: {
+        owner_id: ownerId,
+        expense_date: { gte: startDate, lt: endDate }
+      },
+      select: { amount: true }
+    });
 
-    return data?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+    return expenses.reduce((sum, item) => sum + Number(item.amount), 0);
   }
 }
 

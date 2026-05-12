@@ -1,0 +1,174 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  password_hash String
+  display_name String
+  role         String   @default("owner")
+  status       String   @default("active")
+  created_at   DateTime @default(now())
+
+  business_settings  BusinessSetting?
+  owned_staff        StaffMember[]     @relation("OwnerToStaff")
+  staff_members      StaffMember[]     @relation("StaffToOwner")
+  customers          Customer[]
+  products           Product[]
+  sales              Sale[]
+  debts              Debt[]
+  debt_payments      DebtPayment[]
+  operating_expenses OperatingExpense[]
+
+  @@map("profiles")
+}
+
+model BusinessSetting {
+  id                String   @id @default(cuid())
+  owner_id          String   @unique
+  business_name     String?
+  currency          String?  @default("TZS")
+  low_stock_default Int?     @default(5)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  owner User @relation(fields: [owner_id], references: [id])
+
+  @@map("business_settings")
+}
+
+model StaffMember {
+  id            String   @id @default(cuid())
+  owner_id      String
+  staff_user_id String   @unique
+  created_at    DateTime @default(now())
+
+  owner User @relation("OwnerToStaff", fields: [owner_id], references: [id])
+  staff User @relation("StaffToOwner", fields: [staff_user_id], references: [id])
+
+  @@unique([owner_id, staff_user_id])
+  @@map("staff_members")
+}
+
+model Customer {
+  id         String   @id @default(cuid())
+  owner_id   String
+  name       String
+  phone      String?
+  email      String?
+  address    String?
+  status     String   @default("active")
+  created_at DateTime @default(now())
+
+  owner User @relation(fields: [owner_id], references: [id])
+  debts Debt[]
+
+  @@index([owner_id])
+  @@index([name])
+  @@index([status])
+  @@map("customers")
+}
+
+model Product {
+  id                 String   @id @default(cuid())
+  owner_id           String
+  name               String
+  category           String?
+  buying_price       Float?
+  selling_price      Float?
+  quantity           Int      @default(0)
+  low_stock_threshold Int     @default(5)
+  created_at         DateTime @default(now())
+
+  owner User @relation(fields: [owner_id], references: [id])
+  sales Sale[]
+
+  @@index([owner_id])
+  @@index([category])
+  @@index([name])
+  @@map("products")
+}
+
+model Sale {
+  id          String   @id @default(cuid())
+  owner_id    String
+  product_id  String
+  quantity    Int
+  total_price Float
+  created_at  DateTime @default(now())
+
+  owner   User    @relation(fields: [owner_id], references: [id])
+  product Product @relation(fields: [product_id], references: [id])
+
+  @@index([owner_id])
+  @@index([product_id])
+  @@index([created_at])
+  @@map("sales")
+}
+
+model Debt {
+  id           String   @id @default(cuid())
+  owner_id     String
+  type         String
+  customer_id  String?
+  supplier_name String?
+  amount       Float
+  amount_paid  Float    @default(0)
+  due_date     DateTime
+  status       String   @default("pending")
+  description  String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  owner    User          @relation(fields: [owner_id], references: [id])
+  customer Customer?     @relation(fields: [customer_id], references: [id])
+  payments DebtPayment[]
+
+  @@index([owner_id])
+  @@index([customer_id])
+  @@index([type])
+  @@index([status])
+  @@index([due_date])
+  @@map("debts")
+}
+
+model DebtPayment {
+  id           String   @id @default(cuid())
+  owner_id     String
+  debt_id      String
+  amount       Float
+  payment_date DateTime @default(now())
+  notes        String?
+
+  owner User @relation(fields: [owner_id], references: [id])
+  debt  Debt @relation(fields: [debt_id], references: [id])
+
+  @@index([owner_id])
+  @@index([debt_id])
+  @@map("debt_payments")
+}
+
+model OperatingExpense {
+  id          String   @id @default(cuid())
+  owner_id    String
+  category    String
+  description String?
+  amount      Float
+  expense_date DateTime
+  status      String   @default("paid")
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  owner User @relation(fields: [owner_id], references: [id])
+
+  @@index([owner_id])
+  @@index([category])
+  @@index([expense_date])
+  @@map("operating_expenses")
+}

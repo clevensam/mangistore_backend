@@ -1,24 +1,25 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { verifyToken, extractTokenFromHeader, AuthUser } from './jwt';
+import jwt from 'jsonwebtoken';
+import prisma from '../prisma';
 
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-dev-secret';
 
-let supabase: SupabaseClient;
-
-if (supabaseServiceKey) {
-  supabase = createClient(supabaseUrl, supabaseServiceKey);
-} else {
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
+export interface AuthUser {
+  id: string;
+  email: string;
+  role: string;
+  displayName: string;
+  status: string;
 }
-
-export { supabase };
 
 export interface Context {
   user: AuthUser | null;
-  supabase: SupabaseClient;
   res?: any;
+}
+
+function extractTokenFromHeader(authHeader: string | undefined): string | null {
+  if (!authHeader) return null;
+  const match = authHeader.match(/Bearer\s+(.+)/);
+  return match ? match[1] : null;
 }
 
 export async function createContext(req: any, res?: any): Promise<Context> {
@@ -26,30 +27,33 @@ export async function createContext(req: any, res?: any): Promise<Context> {
   const token = extractTokenFromHeader(authHeader);
 
   if (!token) {
-    return { user: null, supabase, res };
+    return { user: null, res };
   }
 
   try {
-    const payload = verifyToken(token);
-    const { data: user } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', payload.userId)
-      .single();
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { id: true, email: true, display_name: true, role: true, status: true }
+    });
+
+    if (!user) {
+      return { user: null, res };
+    }
 
     return {
-      user: user ? {
+      user: {
         id: user.id,
         email: user.email,
         role: user.role,
         displayName: user.display_name,
         status: user.status
-      } : null,
-      supabase,
+      },
       res
     };
   } catch {
-    return { user: null, supabase, res };
+    return { user: null, res };
   }
 }
 

@@ -1,24 +1,6 @@
 import { productRepository, saleRepository } from '../../repositories';
 import { requireAuth } from '../../auth/context';
 
-interface Product {
-  id: string;
-  name: string;
-  category: string;
-  buying_price: number;
-  selling_price: number;
-  quantity: number;
-  low_stock_threshold: number;
-}
-
-interface Sale {
-  id: string;
-  product_id: string;
-  quantity: number;
-  total_price: number;
-  created_at: string;
-}
-
 export const analysisResolvers = {
   Query: {
     salesAnalysis: async (_: any, { startDate, endDate }: any, context: any) => {
@@ -26,11 +8,11 @@ export const analysisResolvers = {
       const products = await productRepository.getAll(user.id);
       const sales = await saleRepository.getAll(user.id);
 
-      const productMap = new Map<string, Product>(products.map((p: Product) => [p.id, p]));
+      const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
 
-      let filteredSales = sales;
+      let filteredSales: any[] = sales;
       if (startDate || endDate) {
-        filteredSales = sales.filter((s: Sale) => {
+        filteredSales = sales.filter((s: any) => {
           const saleDate = new Date(s.created_at);
           const start = startDate ? new Date(startDate) : null;
           const end = endDate ? new Date(endDate) : null;
@@ -41,8 +23,8 @@ export const analysisResolvers = {
         });
       }
 
-      const totalRevenue = filteredSales.reduce((sum: number, s: Sale) => sum + s.total_price, 0);
-      const totalCost = filteredSales.reduce((sum: number, s: Sale) => {
+      const totalRevenue = filteredSales.reduce((sum: number, s: any) => sum + s.total_price, 0);
+      const totalCost = filteredSales.reduce((sum: number, s: any) => {
         const product = productMap.get(s.product_id);
         if (!product) return sum;
         return sum + (product.buying_price || 0) * s.quantity;
@@ -68,16 +50,16 @@ export const analysisResolvers = {
       const products = await productRepository.getAll(user.id);
       const sales = await saleRepository.getAll(user.id);
 
-      const productSalesMap = new Map<string, Sale[]>();
-      sales.forEach((s: Sale) => {
+      const productSalesMap = new Map<string, any[]>();
+      sales.forEach((s: any) => {
         const existing = productSalesMap.get(s.product_id) || [];
         existing.push(s);
         productSalesMap.set(s.product_id, existing);
       });
 
-      let filteredSales = sales;
+      let filteredSales: any[] = sales;
       if (startDate || endDate) {
-        filteredSales = sales.filter((s: Sale) => {
+        filteredSales = sales.filter((s: any) => {
           const saleDate = new Date(s.created_at);
           const start = startDate ? new Date(startDate) : null;
           const end = endDate ? new Date(endDate) : null;
@@ -88,17 +70,17 @@ export const analysisResolvers = {
         });
       }
 
-      const salesInPeriod = new Set(filteredSales.map((s: Sale) => s.product_id));
+      const salesInPeriod = new Set(filteredSales.map((s: any) => s.product_id));
 
       const now = new Date();
       const deadStock: any[] = [];
 
-      products.forEach((product: Product) => {
+      products.forEach((product: any) => {
         if (product.quantity > 0) {
           const hasSalesInPeriod = salesInPeriod.has(product.id);
           if (!hasSalesInPeriod) {
             const productSales = productSalesMap.get(product.id) || [];
-            const lastSale = productSales.sort((a: Sale, b: Sale) => 
+            const lastSale = productSales.sort((a: any, b: any) =>
               new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
             )[0];
 
@@ -114,8 +96,8 @@ export const analysisResolvers = {
               productId: product.id,
               productName: product.name,
               quantity: product.quantity,
-              category: product.category,
-              lastSaleDate: lastSale?.created_at || null,
+              category: product.category || '',
+              lastSaleDate: lastSale?.created_at?.toISOString?.() || lastSale?.created_at || null,
               daysSinceLastSale
             });
           }
@@ -130,11 +112,11 @@ export const analysisResolvers = {
       const products = await productRepository.getAll(user.id);
       const sales = await saleRepository.getAll(user.id);
 
-      const productMap = new Map<string, Product>(products.map((p: Product) => [p.id, p]));
+      const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
 
-      let filteredSales = sales;
+      let filteredSales: any[] = sales;
       if (startDate || endDate) {
-        filteredSales = sales.filter((s: Sale) => {
+        filteredSales = sales.filter((s: any) => {
           const saleDate = new Date(s.created_at);
           const start = startDate ? new Date(startDate) : null;
           const end = endDate ? new Date(endDate) : null;
@@ -151,7 +133,7 @@ export const analysisResolvers = {
         unitsSold: number;
       }>();
 
-      filteredSales.forEach((s: Sale) => {
+      filteredSales.forEach((s: any) => {
         const product = productMap.get(s.product_id);
         if (!product) return;
 
@@ -163,7 +145,7 @@ export const analysisResolvers = {
       });
 
       const profitability: any[] = [];
-      products.forEach((product: Product) => {
+      products.forEach((product: any) => {
         const stats = productStats.get(product.id);
         if (stats && stats.revenue > 0) {
           const profit = stats.revenue - stats.cost;
@@ -171,7 +153,7 @@ export const analysisResolvers = {
           profitability.push({
             productId: product.id,
             productName: product.name,
-            category: product.category,
+            category: product.category || '',
             revenue: stats.revenue,
             cost: stats.cost,
             profit,
@@ -195,7 +177,7 @@ export const analysisResolvers = {
       let inventoryValue = 0;
       let potentialProfit = 0;
 
-      products.forEach((product: Product) => {
+      products.forEach((product: any) => {
         const value = (product.buying_price || 0) * product.quantity;
         const profit = ((product.selling_price || 0) - (product.buying_price || 0)) * product.quantity;
         inventoryValue += value;
@@ -205,7 +187,7 @@ export const analysisResolvers = {
           outOfStock.push({
             productId: product.id,
             productName: product.name,
-            category: product.category,
+            category: product.category || '',
             quantity: product.quantity,
             threshold: product.low_stock_threshold
           });
@@ -213,7 +195,7 @@ export const analysisResolvers = {
           lowStock.push({
             productId: product.id,
             productName: product.name,
-            category: product.category,
+            category: product.category || '',
             quantity: product.quantity,
             threshold: product.low_stock_threshold
           });
@@ -221,7 +203,7 @@ export const analysisResolvers = {
           overstocked.push({
             productId: product.id,
             productName: product.name,
-            category: product.category,
+            category: product.category || '',
             quantity: product.quantity,
             threshold: product.low_stock_threshold
           });
@@ -242,11 +224,11 @@ export const analysisResolvers = {
       const products = await productRepository.getAll(user.id);
       const sales = await saleRepository.getAll(user.id);
 
-      const productMap = new Map<string, Product>(products.map((p: Product) => [p.id, p]));
+      const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
 
-      let filteredSales = sales;
+      let filteredSales: any[] = sales;
       if (startDate || endDate) {
-        filteredSales = sales.filter((s: Sale) => {
+        filteredSales = sales.filter((s: any) => {
           const saleDate = new Date(s.created_at);
           const start = startDate ? new Date(startDate) : null;
           const end = endDate ? new Date(endDate) : null;
@@ -263,7 +245,7 @@ export const analysisResolvers = {
         unitsSold: number;
       }>();
 
-      filteredSales.forEach((s: Sale) => {
+      filteredSales.forEach((s: any) => {
         const product = productMap.get(s.product_id);
         if (!product) return;
 
@@ -275,7 +257,7 @@ export const analysisResolvers = {
       });
 
       const profitability: any[] = [];
-      products.forEach((product: Product) => {
+      products.forEach((product: any) => {
         const stats = productStats.get(product.id);
         if (stats && stats.revenue > 0) {
           const profit = stats.revenue - stats.cost;
@@ -283,7 +265,7 @@ export const analysisResolvers = {
           profitability.push({
             productId: product.id,
             productName: product.name,
-            category: product.category,
+            category: product.category || '',
             revenue: stats.revenue,
             cost: stats.cost,
             profit,

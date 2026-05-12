@@ -6,10 +6,6 @@ export const errorHandler = (
 ) => {
   console.error('Error:', error);
 
-  if (error.message.includes('Invalid or expired token')) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
   if (error.message.includes('Authentication required')) {
     return res.status(401).json({ error: 'Authentication required' });
   }
