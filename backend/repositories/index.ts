@@ -99,6 +99,62 @@ export class SaleRepository {
     });
   }
 
+  async getSalesReport(ownerId: string, startDate: Date, endDate: Date) {
+    const sales = await prisma.sale.findMany({
+      where: {
+        owner_id: ownerId,
+        created_at: { gte: startDate, lte: endDate },
+      },
+      include: {
+        product: {
+          select: { name: true, buying_price: true },
+        },
+      },
+    });
+
+    const grouped: Record<string, {
+      productId: string;
+      productName: string;
+      totalQuantity: number;
+      totalRevenue: number;
+      totalCost: number;
+    }> = {};
+
+    for (const sale of sales) {
+      const key = sale.product_id;
+      if (!grouped[key]) {
+        grouped[key] = {
+          productId: key,
+          productName: sale.product.name,
+          totalQuantity: 0,
+          totalRevenue: 0,
+          totalCost: 0,
+        };
+      }
+      grouped[key].totalQuantity += sale.quantity;
+      grouped[key].totalRevenue += Number(sale.total_price);
+      grouped[key].totalCost += (sale.product.buying_price || 0) * sale.quantity;
+    }
+
+    const items = Object.values(grouped)
+      .map(item => ({
+        ...item,
+        totalProfit: item.totalRevenue - item.totalCost,
+      }))
+      .sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+    const summary = items.reduce(
+      (acc, item) => ({
+        totalRevenue: acc.totalRevenue + item.totalRevenue,
+        totalQuantity: acc.totalQuantity + item.totalQuantity,
+        totalProfit: acc.totalProfit + item.totalProfit,
+      }),
+      { totalRevenue: 0, totalQuantity: 0, totalProfit: 0 },
+    );
+
+    return { items, summary };
+  }
+
   async recordSale(ownerId: string, productId: string, quantity: number, totalPrice: number) {
     const product = await prisma.product.findFirst({
       where: { id: productId, owner_id: ownerId }

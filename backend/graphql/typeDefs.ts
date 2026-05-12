@@ -106,11 +106,32 @@ export const productTypeDefs = `#graphql
     created_at: String!
   }
 
+  type SalesReportItem {
+    productId: ID!
+    productName: String!
+    totalQuantity: Int!
+    totalRevenue: Float!
+    totalCost: Float!
+    totalProfit: Float!
+  }
+
+  type SalesReportSummary {
+    totalRevenue: Float!
+    totalQuantity: Int!
+    totalProfit: Float!
+  }
+
+  type SalesReport {
+    items: [SalesReportItem!]!
+    summary: SalesReportSummary!
+  }
+
   type Query {
     products: [Product!]!
     sales(startDate: String, endDate: String): [Sale!]!
     product(id: ID!): Product
     productSales(productId: ID!): [Sale!]
+    salesReport(startDate: String!, endDate: String!): SalesReport!
   }
 
   type Mutation {

@@ -67,6 +67,12 @@ export const productResolvers = {
         total_price: s.total_price,
         created_at: s.created_at
       }));
+    },
+    salesReport: async (_: any, { startDate, endDate }: any, context: any) => {
+      const user = requireAuth(context);
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      return saleRepository.getSalesReport(user.id, start, end);
     }
   },
   Mutation: {
