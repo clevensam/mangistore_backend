@@ -19,22 +19,13 @@ export const productResolvers = {
     },
     sales: async (_: any, { startDate, endDate }: any, context: any) => {
       const user = requireAuth(context);
-      const sales = await saleRepository.getAll(user.id);
-      let filtered = sales;
-      
-      if (startDate || endDate) {
-        filtered = sales.filter((s: any) => {
-          const saleDate = new Date(s.created_at);
-          const start = startDate ? new Date(startDate) : null;
-          const end = endDate ? new Date(endDate) : null;
-          
-          if (start && saleDate < start) return false;
-          if (end && saleDate > end) return false;
-          return true;
-        });
-      }
-      
-      return filtered.map((s: any) => ({
+
+      const start = startDate ? new Date(startDate) : new Date(0);
+      const end = endDate ? new Date(endDate) : new Date();
+      end.setHours(23, 59, 59, 999);
+
+      const sales = await saleRepository.getByDateRange(user.id, start, end);
+      return sales.map((s: any) => ({
         id: s.id,
         product_id: s.product_id,
         quantity: s.quantity,

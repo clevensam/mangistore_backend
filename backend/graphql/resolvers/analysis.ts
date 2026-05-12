@@ -6,25 +6,16 @@ export const analysisResolvers = {
     salesAnalysis: async (_: any, { startDate, endDate }: any, context: any) => {
       const user = requireAuth(context);
       const products = await productRepository.getAll(user.id);
-      const sales = await saleRepository.getAll(user.id);
 
+      const start = startDate ? new Date(startDate) : new Date(0);
+      const end = endDate ? new Date(endDate) : new Date();
+      end.setHours(23, 59, 59, 999);
+
+      const sales = await saleRepository.getByDateRange(user.id, start, end);
       const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
 
-      let filteredSales: any[] = sales;
-      if (startDate || endDate) {
-        filteredSales = sales.filter((s: any) => {
-          const saleDate = new Date(s.created_at);
-          const start = startDate ? new Date(startDate) : null;
-          const end = endDate ? new Date(endDate) : null;
-
-          if (start && saleDate < start) return false;
-          if (end && saleDate > end) return false;
-          return true;
-        });
-      }
-
-      const totalRevenue = filteredSales.reduce((sum: number, s: any) => sum + s.total_price, 0);
-      const totalCost = filteredSales.reduce((sum: number, s: any) => {
+      const totalRevenue = sales.reduce((sum: number, s: any) => sum + s.total_price, 0);
+      const totalCost = sales.reduce((sum: number, s: any) => {
         const product = productMap.get(s.product_id);
         if (!product) return sum;
         return sum + (product.buying_price || 0) * s.quantity;
@@ -32,7 +23,7 @@ export const analysisResolvers = {
 
       const grossProfit = totalRevenue - totalCost;
       const profitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
-      const transactionCount = filteredSales.length;
+      const transactionCount = sales.length;
       const averageTransactionValue = transactionCount > 0 ? totalRevenue / transactionCount : 0;
 
       return {
@@ -48,29 +39,29 @@ export const analysisResolvers = {
     deadStockAnalysis: async (_: any, { startDate, endDate }: any, context: any) => {
       const user = requireAuth(context);
       const products = await productRepository.getAll(user.id);
-      const sales = await saleRepository.getAll(user.id);
+      const allSales = await saleRepository.getAll(user.id);
 
       const productSalesMap = new Map<string, any[]>();
-      sales.forEach((s: any) => {
+      allSales.forEach((s: any) => {
         const existing = productSalesMap.get(s.product_id) || [];
         existing.push(s);
         productSalesMap.set(s.product_id, existing);
       });
 
-      let filteredSales: any[] = sales;
-      if (startDate || endDate) {
-        filteredSales = sales.filter((s: any) => {
-          const saleDate = new Date(s.created_at);
-          const start = startDate ? new Date(startDate) : null;
-          const end = endDate ? new Date(endDate) : null;
+      const start = startDate ? new Date(startDate) : null;
+      const end = endDate ? new Date(endDate) : null;
+      if (end) end.setHours(23, 59, 59, 999);
 
-          if (start && saleDate < start) return false;
-          if (end && saleDate > end) return false;
-          return true;
-        });
-      }
-
-      const salesInPeriod = new Set(filteredSales.map((s: any) => s.product_id));
+      const salesInPeriod = new Set(
+        start || end
+          ? allSales.filter((s: any) => {
+              const saleDate = new Date(s.created_at);
+              if (start && saleDate < start) return false;
+              if (end && saleDate > end) return false;
+              return true;
+            }).map((s: any) => s.product_id)
+          : allSales.map((s: any) => s.product_id)
+      );
 
       const now = new Date();
       const deadStock: any[] = [];
@@ -110,22 +101,13 @@ export const analysisResolvers = {
     profitabilityAnalysis: async (_: any, { startDate, endDate }: any, context: any) => {
       const user = requireAuth(context);
       const products = await productRepository.getAll(user.id);
-      const sales = await saleRepository.getAll(user.id);
 
+      const start = startDate ? new Date(startDate) : new Date(0);
+      const end = endDate ? new Date(endDate) : new Date();
+      end.setHours(23, 59, 59, 999);
+
+      const sales = await saleRepository.getByDateRange(user.id, start, end);
       const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
-
-      let filteredSales: any[] = sales;
-      if (startDate || endDate) {
-        filteredSales = sales.filter((s: any) => {
-          const saleDate = new Date(s.created_at);
-          const start = startDate ? new Date(startDate) : null;
-          const end = endDate ? new Date(endDate) : null;
-
-          if (start && saleDate < start) return false;
-          if (end && saleDate > end) return false;
-          return true;
-        });
-      }
 
       const productStats = new Map<string, {
         revenue: number;
@@ -133,7 +115,7 @@ export const analysisResolvers = {
         unitsSold: number;
       }>();
 
-      filteredSales.forEach((s: any) => {
+      sales.forEach((s: any) => {
         const product = productMap.get(s.product_id);
         if (!product) return;
 
@@ -222,22 +204,13 @@ export const analysisResolvers = {
     businessInsights: async (_: any, { startDate, endDate }: any, context: any) => {
       const user = requireAuth(context);
       const products = await productRepository.getAll(user.id);
-      const sales = await saleRepository.getAll(user.id);
 
+      const start = startDate ? new Date(startDate) : new Date(0);
+      const end = endDate ? new Date(endDate) : new Date();
+      end.setHours(23, 59, 59, 999);
+
+      const sales = await saleRepository.getByDateRange(user.id, start, end);
       const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
-
-      let filteredSales: any[] = sales;
-      if (startDate || endDate) {
-        filteredSales = sales.filter((s: any) => {
-          const saleDate = new Date(s.created_at);
-          const start = startDate ? new Date(startDate) : null;
-          const end = endDate ? new Date(endDate) : null;
-
-          if (start && saleDate < start) return false;
-          if (end && saleDate > end) return false;
-          return true;
-        });
-      }
 
       const productStats = new Map<string, {
         revenue: number;
@@ -245,7 +218,7 @@ export const analysisResolvers = {
         unitsSold: number;
       }>();
 
-      filteredSales.forEach((s: any) => {
+      sales.forEach((s: any) => {
         const product = productMap.get(s.product_id);
         if (!product) return;
 

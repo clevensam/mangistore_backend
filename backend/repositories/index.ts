@@ -81,6 +81,16 @@ export class SaleRepository {
     });
   }
 
+  async getByDateRange(ownerId: string, start: Date, end: Date) {
+    return prisma.sale.findMany({
+      where: {
+        owner_id: ownerId,
+        created_at: { gte: start, lte: end },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+  }
+
   async getByProductId(productId: string, ownerId: string) {
     return prisma.sale.findMany({
       where: { product_id: productId, owner_id: ownerId },
