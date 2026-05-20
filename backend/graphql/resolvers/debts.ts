@@ -6,6 +6,9 @@ export const debtResolvers = {
     debts: async (_: any, { type }: any, context: any) => {
       const user = requireAuth(context);
       const ownerId = await getEffectiveOwnerId(context);
+      if (user.role === 'cashier') {
+        type = 'receivable';
+      }
       const debts = await debtRepository.getAll(ownerId, type);
       return debts.map(d => ({
         id: d.id,
@@ -77,6 +80,9 @@ export const debtResolvers = {
     createDebt: async (_: any, { type, customerId, supplierName, amount, dueDate, description }: any, context: any) => {
       const user = requireAuth(context);
       const ownerId = await getEffectiveOwnerId(context);
+      if (user.role === 'cashier' && type === 'payable') {
+        throw new Error('Access denied');
+      }
       const debt = await debtRepository.create({
         type,
         customer_id: customerId || undefined,
@@ -108,6 +114,9 @@ export const debtResolvers = {
       const ownerId = await getEffectiveOwnerId(context);
       const debt = await debtRepository.getById(debtId, ownerId);
       if (!debt) throw new Error('Debt not found');
+      if (user.role === 'cashier' && debt.type === 'payable') {
+        throw new Error('Access denied');
+      }
 
       await debtPaymentRepository.create(ownerId, {
         debt_id: debtId,
@@ -150,6 +159,9 @@ export const debtResolvers = {
       const ownerId = await getEffectiveOwnerId(context);
       const debt = await debtRepository.getById(id, ownerId);
       if (!debt) throw new Error('Debt not found');
+      if (user.role === 'cashier' && debt.type === 'payable') {
+        throw new Error('Access denied');
+      }
 
       const updatedDebt = await debtRepository.updatePayment(id, ownerId, Number(debt.amount), 'paid');
 
