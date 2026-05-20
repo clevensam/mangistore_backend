@@ -1,11 +1,12 @@
 import { productRepository, saleRepository } from '../../repositories';
-import { requireAuth, requireRole } from '../../auth/context';
+import { requireAuth, requireRole, getEffectiveOwnerId } from '../../auth/context';
 
 export const productResolvers = {
   Query: {
     products: async (_: any, __: any, context: any) => {
       const user = requireAuth(context);
-      const products = await productRepository.getAll(user.id);
+      const ownerId = await getEffectiveOwnerId(context);
+      const products = await productRepository.getAll(ownerId);
       return products.map(p => ({
         id: p.id,
         name: p.name,
@@ -19,12 +20,13 @@ export const productResolvers = {
     },
     sales: async (_: any, { startDate, endDate }: any, context: any) => {
       const user = requireAuth(context);
+      const ownerId = await getEffectiveOwnerId(context);
 
       const start = startDate ? new Date(startDate) : new Date(0);
       const end = endDate ? new Date(endDate) : new Date();
       end.setHours(23, 59, 59, 999);
 
-      const sales = await saleRepository.getByDateRange(user.id, start, end);
+      const sales = await saleRepository.getByDateRange(ownerId, start, end);
       return sales.map((s: any) => ({
         id: s.id,
         product_id: s.product_id,
@@ -35,7 +37,8 @@ export const productResolvers = {
     },
     product: async (_: any, { id }: any, context: any) => {
       const user = requireAuth(context);
-      const p = await productRepository.getById(id, user.id);
+      const ownerId = await getEffectiveOwnerId(context);
+      const p = await productRepository.getById(id, ownerId);
       if (!p) return null;
       return {
         id: p.id,
@@ -50,7 +53,8 @@ export const productResolvers = {
     },
     productSales: async (_: any, { productId }: any, context: any) => {
       const user = requireAuth(context);
-      const sales = await saleRepository.getByProductId(productId, user.id);
+      const ownerId = await getEffectiveOwnerId(context);
+      const sales = await saleRepository.getByProductId(productId, ownerId);
       return sales.map(s => ({
         id: s.id,
         product_id: s.product_id,
@@ -61,19 +65,21 @@ export const productResolvers = {
     },
     salesReport: async (_: any, { startDate, endDate }: any, context: any) => {
       const user = requireAuth(context);
+      const ownerId = await getEffectiveOwnerId(context);
       const start = new Date(startDate);
       const end = new Date(endDate);
-      return saleRepository.getSalesReport(user.id, start, end);
+      return saleRepository.getSalesReport(ownerId, start, end);
     }
   },
   Mutation: {
     createProduct: async (_: any, args: any, context: any) => {
       const user = requireRole(context, 'owner', 'manager');
+      const ownerId = await getEffectiveOwnerId(context);
       const { buying_price, selling_price } = args;
       if (selling_price !== undefined && buying_price !== undefined && selling_price <= buying_price) {
         throw new Error('Selling price must be greater than buying price');
       }
-      const product = await productRepository.create({ ...args, owner_id: user.id });
+      const product = await productRepository.create({ ...args, owner_id: ownerId });
       return {
         id: product.id,
         name: product.name,
@@ -87,11 +93,12 @@ export const productResolvers = {
     },
     updateProduct: async (_: any, { id, ...updates }: any, context: any) => {
       const user = requireRole(context, 'owner', 'manager');
+      const ownerId = await getEffectiveOwnerId(context);
       const { buying_price, selling_price } = updates;
       if (selling_price !== undefined && buying_price !== undefined && selling_price <= buying_price) {
         throw new Error('Selling price must be greater than buying price');
       }
-      const product = await productRepository.update(id, user.id, updates);
+      const product = await productRepository.update(id, ownerId, updates);
       return {
         id: product.id,
         name: product.name,
@@ -105,8 +112,9 @@ export const productResolvers = {
     },
     deleteProduct: async (_: any, { id }: any, context: any) => {
       const user = requireRole(context, 'owner', 'manager');
+      const ownerId = await getEffectiveOwnerId(context);
       try {
-        return await productRepository.delete(id, user.id);
+        return await productRepository.delete(id, ownerId);
       } catch (error: any) {
         const errorCode = error?.code || error?.message || '';
         if (errorCode === '23503' || String(errorCode).includes('23503')) {
@@ -117,8 +125,9 @@ export const productResolvers = {
     },
     recordSale: async (_: any, { productId, quantity, totalPrice }: any, context: any) => {
       const user = requireAuth(context);
+      const ownerId = await getEffectiveOwnerId(context);
       try {
-        const sale = await saleRepository.recordSale(user.id, productId, quantity, totalPrice);
+        const sale = await saleRepository.recordSale(ownerId, productId, quantity, totalPrice);
         return {
           id: sale.id,
           product_id: sale.product_id,

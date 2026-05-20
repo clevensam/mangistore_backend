@@ -1,17 +1,18 @@
 import { productRepository, saleRepository } from '../../repositories';
-import { requireRole } from '../../auth/context';
+import { requireRole, getEffectiveOwnerId } from '../../auth/context';
 
 export const analysisResolvers = {
   Query: {
     salesAnalysis: async (_: any, { startDate, endDate }: any, context: any) => {
       const user = requireRole(context, 'owner', 'manager');
-      const products = await productRepository.getAll(user.id);
+      const ownerId = await getEffectiveOwnerId(context);
+      const products = await productRepository.getAll(ownerId);
 
       const start = startDate ? new Date(startDate) : new Date(0);
       const end = endDate ? new Date(endDate) : new Date();
       end.setHours(23, 59, 59, 999);
 
-      const sales = await saleRepository.getByDateRange(user.id, start, end);
+      const sales = await saleRepository.getByDateRange(ownerId, start, end);
       const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
 
       const totalRevenue = sales.reduce((sum: number, s: any) => sum + s.total_price, 0);
@@ -38,8 +39,9 @@ export const analysisResolvers = {
 
     deadStockAnalysis: async (_: any, { startDate, endDate }: any, context: any) => {
       const user = requireRole(context, 'owner', 'manager');
-      const products = await productRepository.getAll(user.id);
-      const allSales = await saleRepository.getAll(user.id);
+      const ownerId = await getEffectiveOwnerId(context);
+      const products = await productRepository.getAll(ownerId);
+      const allSales = await saleRepository.getAll(ownerId);
 
       const productSalesMap = new Map<string, any[]>();
       allSales.forEach((s: any) => {
@@ -100,13 +102,14 @@ export const analysisResolvers = {
 
     profitabilityAnalysis: async (_: any, { startDate, endDate }: any, context: any) => {
       const user = requireRole(context, 'owner', 'manager');
-      const products = await productRepository.getAll(user.id);
+      const ownerId = await getEffectiveOwnerId(context);
+      const products = await productRepository.getAll(ownerId);
 
       const start = startDate ? new Date(startDate) : new Date(0);
       const end = endDate ? new Date(endDate) : new Date();
       end.setHours(23, 59, 59, 999);
 
-      const sales = await saleRepository.getByDateRange(user.id, start, end);
+      const sales = await saleRepository.getByDateRange(ownerId, start, end);
       const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
 
       const productStats = new Map<string, {
@@ -150,7 +153,8 @@ export const analysisResolvers = {
 
     inventoryHealth: async (_: any, __: any, context: any) => {
       const user = requireRole(context, 'owner', 'manager');
-      const products = await productRepository.getAll(user.id);
+      const ownerId = await getEffectiveOwnerId(context);
+      const products = await productRepository.getAll(ownerId);
 
       const lowStock: any[] = [];
       const overstocked: any[] = [];
@@ -203,13 +207,14 @@ export const analysisResolvers = {
 
     businessInsights: async (_: any, { startDate, endDate }: any, context: any) => {
       const user = requireRole(context, 'owner', 'manager');
-      const products = await productRepository.getAll(user.id);
+      const ownerId = await getEffectiveOwnerId(context);
+      const products = await productRepository.getAll(ownerId);
 
       const start = startDate ? new Date(startDate) : new Date(0);
       const end = endDate ? new Date(endDate) : new Date();
       end.setHours(23, 59, 59, 999);
 
-      const sales = await saleRepository.getByDateRange(user.id, start, end);
+      const sales = await saleRepository.getByDateRange(ownerId, start, end);
       const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
 
       const productStats = new Map<string, {

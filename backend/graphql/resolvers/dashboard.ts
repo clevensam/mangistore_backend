@@ -1,12 +1,13 @@
 import { productRepository, saleRepository } from '../../repositories';
-import { requireAuth } from '../../auth/context';
+import { requireAuth, getEffectiveOwnerId } from '../../auth/context';
 
 export const dashboardResolvers = {
   Query: {
     dashboardData: async (_: any, __: any, context: any) => {
       const user = requireAuth(context);
-      const products = await productRepository.getAll(user.id);
-      const sales = await saleRepository.getAll(user.id);
+      const ownerId = await getEffectiveOwnerId(context);
+      const products = await productRepository.getAll(ownerId);
+      const sales = await saleRepository.getAll(ownerId);
 
       const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
 

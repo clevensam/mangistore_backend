@@ -1,11 +1,12 @@
 import { customerRepository } from '../../repositories/customerRepo';
-import { requireAuth } from '../../auth/context';
+import { requireAuth, getEffectiveOwnerId } from '../../auth/context';
 
 export const customerResolvers = {
   Query: {
     customers: async (_: any, __: any, context: any) => {
       const user = requireAuth(context);
-      const customers = await customerRepository.getAll(user.id);
+      const ownerId = await getEffectiveOwnerId(context);
+      const customers = await customerRepository.getAll(ownerId);
       return customers.map(c => ({
         id: c.id,
         name: c.name,
@@ -18,7 +19,8 @@ export const customerResolvers = {
     },
     customer: async (_: any, { id }: any, context: any) => {
       const user = requireAuth(context);
-      const c = await customerRepository.getById(id, user.id);
+      const ownerId = await getEffectiveOwnerId(context);
+      const c = await customerRepository.getById(id, ownerId);
       if (!c) return null;
       return {
         id: c.id,
@@ -34,7 +36,8 @@ export const customerResolvers = {
   Mutation: {
     createCustomer: async (_: any, { name, phone, email, address }: any, context: any) => {
       const user = requireAuth(context);
-      const customer = await customerRepository.create({ name, phone, email, address, owner_id: user.id });
+      const ownerId = await getEffectiveOwnerId(context);
+      const customer = await customerRepository.create({ name, phone, email, address, owner_id: ownerId });
       return {
         id: customer.id,
         name: customer.name,
@@ -47,7 +50,8 @@ export const customerResolvers = {
     },
     updateCustomer: async (_: any, { id, name, phone, email, address, status }: any, context: any) => {
       const user = requireAuth(context);
-      const customer = await customerRepository.update(id, user.id, { name, phone, email, address, status });
+      const ownerId = await getEffectiveOwnerId(context);
+      const customer = await customerRepository.update(id, ownerId, { name, phone, email, address, status });
       return {
         id: customer.id,
         name: customer.name,
@@ -60,7 +64,8 @@ export const customerResolvers = {
     },
     deleteCustomer: async (_: any, { id }: any, context: any) => {
       const user = requireAuth(context);
-      return await customerRepository.delete(id, user.id);
+      const ownerId = await getEffectiveOwnerId(context);
+      return await customerRepository.delete(id, ownerId);
     }
   }
 };

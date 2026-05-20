@@ -71,3 +71,18 @@ export function requireRole(context: Context, ...roles: string[]): AuthUser {
   }
   return user;
 }
+
+export async function getEffectiveOwnerId(context: Context): Promise<string> {
+  const user = requireAuth(context);
+  if (user.role === 'owner') {
+    return user.id;
+  }
+  const staffMember = await prisma.staffMember.findUnique({
+    where: { staff_user_id: user.id },
+    select: { owner_id: true }
+  });
+  if (!staffMember) {
+    throw new Error('Staff member not associated with any owner');
+  }
+  return staffMember.owner_id;
+}

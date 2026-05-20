@@ -1,11 +1,12 @@
 import { debtRepository, debtPaymentRepository } from '../../repositories/debtRepo';
-import { requireAuth } from '../../auth/context';
+import { requireAuth, getEffectiveOwnerId } from '../../auth/context';
 
 export const debtResolvers = {
   Query: {
     debts: async (_: any, { type }: any, context: any) => {
       const user = requireAuth(context);
-      const debts = await debtRepository.getAll(user.id, type);
+      const ownerId = await getEffectiveOwnerId(context);
+      const debts = await debtRepository.getAll(ownerId, type);
       return debts.map(d => ({
         id: d.id,
         type: d.type,
@@ -32,7 +33,8 @@ export const debtResolvers = {
     },
     debt: async (_: any, { id }: any, context: any) => {
       const user = requireAuth(context);
-      const d = await debtRepository.getById(id, user.id);
+      const ownerId = await getEffectiveOwnerId(context);
+      const d = await debtRepository.getById(id, ownerId);
       if (!d) return null;
       return {
         id: d.id,
@@ -60,7 +62,8 @@ export const debtResolvers = {
     },
     debtPayments: async (_: any, { debtId }: any, context: any) => {
       const user = requireAuth(context);
-      const payments = await debtPaymentRepository.getByDebtId(debtId, user.id);
+      const ownerId = await getEffectiveOwnerId(context);
+      const payments = await debtPaymentRepository.getByDebtId(debtId, ownerId);
       return payments.map(p => ({
         id: p.id,
         debtId: p.debt_id,
@@ -73,6 +76,7 @@ export const debtResolvers = {
   Mutation: {
     createDebt: async (_: any, { type, customerId, supplierName, amount, dueDate, description }: any, context: any) => {
       const user = requireAuth(context);
+      const ownerId = await getEffectiveOwnerId(context);
       const debt = await debtRepository.create({
         type,
         customer_id: customerId || undefined,
@@ -80,7 +84,7 @@ export const debtResolvers = {
         amount,
         due_date: dueDate,
         description,
-        owner_id: user.id
+        owner_id: ownerId
       });
 
       return {
@@ -101,10 +105,11 @@ export const debtResolvers = {
     },
     recordDebtPayment: async (_: any, { debtId, amount, notes }: any, context: any) => {
       const user = requireAuth(context);
-      const debt = await debtRepository.getById(debtId, user.id);
+      const ownerId = await getEffectiveOwnerId(context);
+      const debt = await debtRepository.getById(debtId, ownerId);
       if (!debt) throw new Error('Debt not found');
 
-      await debtPaymentRepository.create(user.id, {
+      await debtPaymentRepository.create(ownerId, {
         debt_id: debtId,
         amount,
         notes
@@ -114,7 +119,7 @@ export const debtResolvers = {
       const remaining = Number(debt.amount) - newAmountPaid;
       const newStatus = remaining <= 0 ? 'paid' : 'partial';
 
-      const updatedDebt = await debtRepository.updatePayment(debtId, user.id, newAmountPaid, newStatus);
+      const updatedDebt = await debtRepository.updatePayment(debtId, ownerId, newAmountPaid, newStatus);
 
       return {
         id: updatedDebt.id,
@@ -142,10 +147,11 @@ export const debtResolvers = {
     },
     markDebtAsPaid: async (_: any, { id }: any, context: any) => {
       const user = requireAuth(context);
-      const debt = await debtRepository.getById(id, user.id);
+      const ownerId = await getEffectiveOwnerId(context);
+      const debt = await debtRepository.getById(id, ownerId);
       if (!debt) throw new Error('Debt not found');
 
-      const updatedDebt = await debtRepository.updatePayment(id, user.id, Number(debt.amount), 'paid');
+      const updatedDebt = await debtRepository.updatePayment(id, ownerId, Number(debt.amount), 'paid');
 
       return {
         id: updatedDebt.id,
