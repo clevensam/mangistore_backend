@@ -1,10 +1,10 @@
 import { operatingExpenseRepository, OperatingExpenseInput } from '../../repositories';
-import { requireAuth } from '../../auth/context';
+import { requireRole } from '../../auth/context';
 
 export const expenseResolvers = {
   Query: {
     operatingExpenses: async (_: any, { category }: { category?: string }, context: any) => {
-      const user = requireAuth(context);
+      const user = requireRole(context, 'owner', 'manager');
       if (category) {
         return await operatingExpenseRepository.getByCategory(user.id, category);
       }
@@ -12,13 +12,13 @@ export const expenseResolvers = {
     },
 
     operatingExpense: async (_: any, { id }: { id: string }, context: any) => {
-      const user = requireAuth(context);
+      const user = requireRole(context, 'owner', 'manager');
       const expenses = await operatingExpenseRepository.getAll(user.id);
       return expenses.find(e => e.id === id);
     },
 
     expenseTotalsByCategory: async (_: any, __: any, context: any) => {
-      const user = requireAuth(context);
+      const user = requireRole(context, 'owner', 'manager');
       const totals = await operatingExpenseRepository.getTotalByCategory(user.id);
       return Object.entries(totals).map(([category, total]) => ({
         category,
@@ -27,14 +27,14 @@ export const expenseResolvers = {
     },
 
     monthlyExpenseTotal: async (_: any, { year, month }: { year: number; month: number }, context: any) => {
-      const user = requireAuth(context);
+      const user = requireRole(context, 'owner', 'manager');
       return await operatingExpenseRepository.getMonthlyTotal(user.id, year, month);
     }
   },
 
   Mutation: {
     createOperatingExpense: async (_: any, args: any, context: any) => {
-      const user = requireAuth(context);
+      const user = requireRole(context, 'owner', 'manager');
       const input: OperatingExpenseInput = {
         category: args.category,
         description: args.description || null,
@@ -47,7 +47,7 @@ export const expenseResolvers = {
     },
 
     updateOperatingExpense: async (_: any, args: any, context: any) => {
-      const user = requireAuth(context);
+      const user = requireRole(context, 'owner', 'manager');
       const updates: Partial<OperatingExpenseInput> = {};
       if (args.category) updates.category = args.category;
       if (args.description !== undefined) updates.description = args.description;
@@ -59,7 +59,7 @@ export const expenseResolvers = {
     },
 
     deleteOperatingExpense: async (_: any, { id }: { id: string }, context: any) => {
-      const user = requireAuth(context);
+      const user = requireRole(context, 'owner', 'manager');
       return await operatingExpenseRepository.delete(id, user.id);
     }
   },

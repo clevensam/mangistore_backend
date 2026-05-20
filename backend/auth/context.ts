@@ -64,10 +64,10 @@ export function requireAuth(context: Context): AuthUser {
   return context.user;
 }
 
-export function requireOwner(context: Context): AuthUser {
+export function requireRole(context: Context, ...roles: string[]): AuthUser {
   const user = requireAuth(context);
-  if (user.role !== 'owner') {
-    throw new Error('Owner access required');
+  if (!roles.includes(user.role)) {
+    throw new Error('Access denied. Required role: ' + roles.join(' or '));
   }
   return user;
 }

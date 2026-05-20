@@ -1,5 +1,5 @@
 import { productRepository, saleRepository } from '../../repositories';
-import { requireAuth } from '../../auth/context';
+import { requireAuth, requireRole } from '../../auth/context';
 
 export const productResolvers = {
   Query: {
@@ -68,7 +68,7 @@ export const productResolvers = {
   },
   Mutation: {
     createProduct: async (_: any, args: any, context: any) => {
-      const user = requireAuth(context);
+      const user = requireRole(context, 'owner', 'manager');
       const { buying_price, selling_price } = args;
       if (selling_price !== undefined && buying_price !== undefined && selling_price <= buying_price) {
         throw new Error('Selling price must be greater than buying price');
@@ -86,7 +86,7 @@ export const productResolvers = {
       };
     },
     updateProduct: async (_: any, { id, ...updates }: any, context: any) => {
-      const user = requireAuth(context);
+      const user = requireRole(context, 'owner', 'manager');
       const { buying_price, selling_price } = updates;
       if (selling_price !== undefined && buying_price !== undefined && selling_price <= buying_price) {
         throw new Error('Selling price must be greater than buying price');
@@ -104,7 +104,7 @@ export const productResolvers = {
       };
     },
     deleteProduct: async (_: any, { id }: any, context: any) => {
-      const user = requireAuth(context);
+      const user = requireRole(context, 'owner', 'manager');
       try {
         return await productRepository.delete(id, user.id);
       } catch (error: any) {

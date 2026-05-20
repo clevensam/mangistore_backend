@@ -10,7 +10,7 @@ export const errorHandler = (
     return res.status(401).json({ error: 'Authentication required' });
   }
 
-  if (error.message.includes('Owner access required')) {
+  if (error.message.includes('Access denied')) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 

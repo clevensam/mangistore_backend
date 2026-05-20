@@ -12,7 +12,7 @@ model User {
   email        String   @unique
   password_hash String
   display_name String
-  role         String   @default("owner")
+  role         String   @default("owner") // owner | manager | cashier
   status       String   @default("active")
   created_at   DateTime @default(now())
 

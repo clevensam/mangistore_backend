@@ -8,6 +8,15 @@ export const authTypeDefs = `#graphql
     createdAt: String!
   }
 
+  type StaffProfile {
+    id: ID!
+    email: String!
+    displayName: String!
+    role: String!
+    status: String!
+    createdAt: String!
+  }
+
   type AuthPayload {
     token: String!
     user: User!
@@ -15,12 +24,15 @@ export const authTypeDefs = `#graphql
 
   type Query {
     me: User
+    staffMembers: [StaffProfile!]!
   }
 
   type Mutation {
     login(email: String!, password: String!): AuthPayload!
     register(email: String!, password: String!, displayName: String!): AuthPayload!
-    createStaff(email: String!, password: String!, displayName: String!): User!
+    createStaff(email: String!, password: String!, displayName: String!, role: String): User!
+    updateStaffStatus(id: ID!, status: String!): StaffProfile!
+    deleteStaff(id: ID!): Boolean!
     logout: Boolean!
   }
 `;

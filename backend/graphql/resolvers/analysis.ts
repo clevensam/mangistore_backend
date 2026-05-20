@@ -1,10 +1,10 @@
 import { productRepository, saleRepository } from '../../repositories';
-import { requireAuth } from '../../auth/context';
+import { requireRole } from '../../auth/context';
 
 export const analysisResolvers = {
   Query: {
     salesAnalysis: async (_: any, { startDate, endDate }: any, context: any) => {
-      const user = requireAuth(context);
+      const user = requireRole(context, 'owner', 'manager');
       const products = await productRepository.getAll(user.id);
 
       const start = startDate ? new Date(startDate) : new Date(0);
@@ -37,7 +37,7 @@ export const analysisResolvers = {
     },
 
     deadStockAnalysis: async (_: any, { startDate, endDate }: any, context: any) => {
-      const user = requireAuth(context);
+      const user = requireRole(context, 'owner', 'manager');
       const products = await productRepository.getAll(user.id);
       const allSales = await saleRepository.getAll(user.id);
 
@@ -99,7 +99,7 @@ export const analysisResolvers = {
     },
 
     profitabilityAnalysis: async (_: any, { startDate, endDate }: any, context: any) => {
-      const user = requireAuth(context);
+      const user = requireRole(context, 'owner', 'manager');
       const products = await productRepository.getAll(user.id);
 
       const start = startDate ? new Date(startDate) : new Date(0);
@@ -149,7 +149,7 @@ export const analysisResolvers = {
     },
 
     inventoryHealth: async (_: any, __: any, context: any) => {
-      const user = requireAuth(context);
+      const user = requireRole(context, 'owner', 'manager');
       const products = await productRepository.getAll(user.id);
 
       const lowStock: any[] = [];
@@ -202,7 +202,7 @@ export const analysisResolvers = {
     },
 
     businessInsights: async (_: any, { startDate, endDate }: any, context: any) => {
-      const user = requireAuth(context);
+      const user = requireRole(context, 'owner', 'manager');
       const products = await productRepository.getAll(user.id);
 
       const start = startDate ? new Date(startDate) : new Date(0);

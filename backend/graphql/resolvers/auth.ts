@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../../prisma';
-import { requireAuth } from '../../auth/context';
+import { requireAuth, requireRole } from '../../auth/context';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-dev-secret';
 
@@ -28,6 +28,25 @@ export const authResolvers = {
         status: profile.status,
         createdAt: profile.created_at.toISOString()
       };
+    },
+    staffMembers: async (_: any, __: any, context: any) => {
+      const user = requireRole(context, 'owner');
+      const staffMembers = await prisma.staffMember.findMany({
+        where: { owner_id: user.id },
+        include: {
+          staff: {
+            select: { id: true, email: true, display_name: true, role: true, status: true, created_at: true }
+          }
+        }
+      });
+      return staffMembers.map(sm => ({
+        id: sm.staff.id,
+        email: sm.staff.email,
+        displayName: sm.staff.display_name,
+        role: sm.staff.role,
+        status: sm.staff.status,
+        createdAt: sm.staff.created_at.toISOString()
+      }));
     }
   },
   Mutation: {
@@ -92,11 +111,8 @@ export const authResolvers = {
         }
       };
     },
-    createStaff: async (_: any, { email, password, displayName }: any, context: any) => {
-      const user = requireAuth(context);
-      if (user.role !== 'owner') {
-        throw new Error('Only owners can create staff accounts');
-      }
+    createStaff: async (_: any, { email, password, displayName, role }: any, context: any) => {
+      const user = requireRole(context, 'owner');
 
       const existing = await prisma.user.findUnique({ where: { email } });
       if (existing) {
@@ -110,7 +126,7 @@ export const authResolvers = {
           email,
           password_hash: passwordHash,
           display_name: displayName,
-          role: 'staff',
+          role: role || 'cashier',
           status: 'active'
         }
       });
@@ -130,6 +146,27 @@ export const authResolvers = {
         status: staff.status,
         createdAt: staff.created_at.toISOString()
       };
+    },
+    updateStaffStatus: async (_: any, { id, status }: any, context: any) => {
+      requireRole(context, 'owner');
+      const updated = await prisma.user.update({
+        where: { id },
+        data: { status }
+      });
+      return {
+        id: updated.id,
+        email: updated.email,
+        displayName: updated.display_name,
+        role: updated.role,
+        status: updated.status,
+        createdAt: updated.created_at.toISOString()
+      };
+    },
+    deleteStaff: async (_: any, { id }: any, context: any) => {
+      const user = requireRole(context, 'owner');
+      await prisma.staffMember.delete({ where: { staff_user_id: id } });
+      await prisma.user.delete({ where: { id } });
+      return true;
     },
     logout: async (_: any, __: any, context: any) => {
       return true;
