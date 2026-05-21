@@ -1,33 +1,50 @@
-import dns from 'dns';
+import { resolve4 } from 'dns/promises';
 import nodemailer from 'nodemailer';
 
-dns.setDefaultResultOrder('ipv4first');
+const SMTP_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
+const SMTP_PORT = parseInt(process.env.EMAIL_PORT || '587', 10);
 
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.EMAIL_PORT || '587', 10),
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER || '',
-    pass: process.env.EMAIL_PASSWORD || '',
-  },
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  pool: true,
-  maxConnections: 5,
-  maxMessages: 100,
-  tls: {
-    rejectUnauthorized: false,
-  },
-});
+let transporter: nodemailer.Transporter;
+
+async function getTransporter(): Promise<nodemailer.Transporter> {
+  if (transporter) return transporter;
+
+  let host = SMTP_HOST;
+  try {
+    const ips = await resolve4(SMTP_HOST);
+    if (ips.length > 0) host = ips[0];
+  } catch {}
+
+  transporter = nodemailer.createTransport({
+    host,
+    port: SMTP_PORT,
+    secure: false,
+    auth: {
+      user: process.env.EMAIL_USER || '',
+      pass: process.env.EMAIL_PASSWORD || '',
+    },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 100,
+    tls: {
+      rejectUnauthorized: false,
+    },
+  });
+
+  return transporter;
+}
 
 const FROM = process.env.DEFAULT_FROM_EMAIL || 'noreply@mangistore.com';
 
 export async function verifyEmailConfig(): Promise<void> {
-  await transporter.verify();
+  const t = await getTransporter();
+  await t.verify();
 }
 
 export async function sendOtpEmail(to: string, otp: string): Promise<void> {
+  const t = await getTransporter();
   const mailOptions = {
     from: FROM,
     to,
@@ -49,5 +66,5 @@ export async function sendOtpEmail(to: string, otp: string): Promise<void> {
     `,
   };
 
-  await transporter.sendMail(mailOptions);
+  await t.sendMail(mailOptions);
 }
