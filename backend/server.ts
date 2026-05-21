@@ -14,8 +14,6 @@ import { expenseResolvers } from "./graphql/resolvers/expenses";
 import { analysisResolvers } from "./graphql/resolvers/analysis";
 import { dashboardResolvers } from "./graphql/resolvers/dashboard";
 import { createContext } from "./auth/context";
-import { resolve4 } from "dns/promises";
-import nodemailer from "nodemailer";
 import { verifyEmailConfig } from "./services/email";
 import { errorHandler } from "./middleware/errorHandler";
 
@@ -72,57 +70,6 @@ async function startServer() {
 
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", message: "Server is running with GraphQL API" });
-  });
-
-  app.get("/api/debug/email-env", (req, res) => {
-    res.json({
-      EMAIL_HOST: process.env.EMAIL_HOST ? 'set' : 'MISSING',
-      EMAIL_PORT: process.env.EMAIL_PORT ? 'set' : 'MISSING',
-      EMAIL_USER: process.env.EMAIL_USER ? 'set' : 'MISSING',
-      EMAIL_PASSWORD: process.env.EMAIL_PASSWORD ? 'set' : 'MISSING',
-      DEFAULT_FROM_EMAIL: process.env.DEFAULT_FROM_EMAIL ? 'set' : 'MISSING',
-    });
-  });
-
-  app.get("/api/debug/email-test", async (req, res) => {
-    const host = process.env.EMAIL_HOST || 'smtp.gmail.com';
-    let ips: string[] = [];
-    try {
-      ips = await resolve4(host);
-    } catch (e) {
-      return res.json({ dns_error: (e as Error).message, note: 'trying raw socket test instead' });
-    }
-
-    if (ips.length === 0) {
-      return res.json({ error: 'no IPv4 addresses resolved' });
-    }
-
-    const results: any = { resolved: ips };
-    for (const ip of ips.slice(0, 2)) {
-      for (const port of [587, 465]) {
-        const key = `${ip}:${port}`;
-        try {
-          const t = nodemailer.createTransport({
-            host: ip,
-            port,
-            secure: port === 465,
-            auth: {
-              user: process.env.EMAIL_USER || '',
-              pass: process.env.EMAIL_PASSWORD || '',
-            },
-            connectionTimeout: 8000,
-            greetingTimeout: 8000,
-            tls: { rejectUnauthorized: false },
-          });
-          await t.verify();
-          results[key] = { ok: true };
-        } catch (err) {
-          const error = err as Error;
-          results[key] = { ok: false, message: error.message, code: (error as any).code };
-        }
-      }
-    }
-    res.json(results);
   });
 
   app.use(errorHandler);
