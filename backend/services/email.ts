@@ -1,35 +1,28 @@
-import nodemailer from 'nodemailer';
+import { MailerSend, EmailParams, Sender, Recipient } from "mailersend";
 
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.EMAIL_PORT || '587', 10),
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER || '',
-    pass: process.env.EMAIL_PASSWORD || '',
-  },
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  pool: true,
-  maxConnections: 5,
-  maxMessages: 100,
-  tls: {
-    rejectUnauthorized: false,
-  },
+const mailerSend = new MailerSend({
+  apiKey: process.env.MAILERSEND_API_KEY || '',
 });
 
-const FROM = process.env.DEFAULT_FROM_EMAIL || 'noreply@mangistore.com';
+const FROM_EMAIL = process.env.DEFAULT_FROM_EMAIL || 'noreply@mangistore.com';
+const FROM_NAME = 'Mangi Store';
 
 export async function verifyEmailConfig(): Promise<void> {
-  await transporter.verify();
+  if (!process.env.MAILERSEND_API_KEY) {
+    throw new Error('MAILERSEND_API_KEY is not set');
+  }
 }
 
 export async function sendOtpEmail(to: string, otp: string): Promise<void> {
-  const mailOptions = {
-    from: FROM,
-    to,
-    subject: 'Your Mangi Store Verification Code',
-    html: `
+  const sentFrom = new Sender(FROM_EMAIL, FROM_NAME);
+  const recipients = [new Recipient(to)];
+
+  const emailParams = new EmailParams()
+    .setFrom(sentFrom)
+    .setTo(recipients)
+    .setReplyTo(sentFrom)
+    .setSubject('Your Mangi Store Verification Code')
+    .setHtml(`
       <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background: #ffffff; border-radius: 16px; border: 1px solid #f1f5f9;">
         <div style="text-align: center; margin-bottom: 24px;">
           <h1 style="color: #ea580c; font-size: 24px; margin: 0;">Mangi Store</h1>
@@ -43,8 +36,7 @@ export async function sendOtpEmail(to: string, otp: string): Promise<void> {
         <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0 0;" />
         <p style="color: #cbd5e1; font-size: 12px; text-align: center; margin: 12px 0 0;">&copy; ${new Date().getFullYear()} Mangi Store. All rights reserved.</p>
       </div>
-    `,
-  };
+    `);
 
-  await transporter.sendMail(mailOptions);
+  await mailerSend.email.send(emailParams);
 }
