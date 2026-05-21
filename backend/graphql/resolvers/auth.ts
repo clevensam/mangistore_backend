@@ -2,16 +2,12 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../../prisma';
 import { requireAuth, requireRole } from '../../auth/context';
-import { sendOtpEmail } from '../../services/email';
+
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-dev-secret';
 
 function generateToken(userId: string): string {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
-}
-
-function generateOtp(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 export const authResolvers = {
@@ -91,36 +87,34 @@ export const authResolvers = {
       const existing = await prisma.user.findUnique({ where: { email } });
       if (existing) {
         if (existing.status === 'pending') {
-          const otp = generateOtp();
-          const otpHash = await bcrypt.hash(otp, 10);
-          const expiry = new Date(Date.now() + 15 * 60 * 1000);
-
-          await prisma.user.update({
+          const updated = await prisma.user.update({
             where: { email },
             data: {
               password_hash: await bcrypt.hash(password, 10),
               display_name: displayName,
-              otp_hash: otpHash,
-              otp_expiry: expiry,
+              status: 'active',
+              otp_hash: null,
+              otp_expiry: null,
             }
           });
 
-          try {
-            await sendOtpEmail(email, otp);
-          } catch (err) {
-            console.error('sendOtpEmail failed:', err);
-            throw new Error('Failed to send verification email. Please try again.');
-          }
-
-          return { email, message: 'An account with this email already exists but is pending verification. A new OTP has been sent.' };
+          const token = generateToken(updated.id);
+          return {
+            token,
+            user: {
+              id: updated.id,
+              email: updated.email,
+              displayName: updated.display_name,
+              role: updated.role,
+              status: updated.status,
+              createdAt: updated.created_at.toISOString()
+            }
+          };
         }
         throw new Error('Email already registered');
       }
 
       const passwordHash = await bcrypt.hash(password, 10);
-      const otp = generateOtp();
-      const otpHash = await bcrypt.hash(otp, 10);
-      const expiry = new Date(Date.now() + 15 * 60 * 1000);
 
       const user = await prisma.user.create({
         data: {
@@ -128,77 +122,25 @@ export const authResolvers = {
           password_hash: passwordHash,
           display_name: displayName,
           role: 'owner',
-          status: 'pending',
-          otp_hash: otpHash,
-          otp_expiry: expiry,
+          status: 'active',
         }
       });
 
-      try {
-        await sendOtpEmail(email, otp);
-      } catch (err) {
-        await prisma.user.delete({ where: { id: user.id } });
-        console.error('sendOtpEmail failed:', err);
-        throw new Error('Failed to send verification email. Please try again.');
-      }
+      const token = generateToken(user.id);
 
-      return { email, message: 'Account created! Check your email for the verification code.' };
+      return {
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          displayName: user.display_name,
+          role: user.role,
+          status: user.status,
+          createdAt: user.created_at.toISOString()
+        }
+      };
     },
-    resendOtp: async (_: any, { email }: any) => {
-      const user = await prisma.user.findUnique({ where: { email } });
-      if (!user) {
-        throw new Error('No account found with this email');
-      }
-      if (user.status !== 'pending') {
-        throw new Error('Account is already verified');
-      }
 
-      const otp = generateOtp();
-      const otpHash = await bcrypt.hash(otp, 10);
-      const expiry = new Date(Date.now() + 15 * 60 * 1000);
-
-      await prisma.user.update({
-        where: { email },
-        data: { otp_hash: otpHash, otp_expiry: expiry }
-      });
-
-      try {
-        await sendOtpEmail(email, otp);
-      } catch (err) {
-        console.error('sendOtpEmail failed:', err);
-        throw new Error('Failed to send verification email. Please try again.');
-      }
-
-      return { message: 'A new verification code has been sent to your email.' };
-    },
-    verifyOtp: async (_: any, { email, otp }: any) => {
-      const user = await prisma.user.findUnique({ where: { email } });
-      if (!user) {
-        throw new Error('No account found with this email');
-      }
-      if (user.status !== 'pending') {
-        throw new Error('Account is already verified');
-      }
-      if (!user.otp_hash || !user.otp_expiry) {
-        throw new Error('No verification code found. Please request a new one.');
-      }
-
-      if (new Date() > user.otp_expiry) {
-        throw new Error('Verification code has expired. Please request a new one.');
-      }
-
-      const valid = await bcrypt.compare(otp, user.otp_hash);
-      if (!valid) {
-        throw new Error('Invalid verification code');
-      }
-
-      await prisma.user.update({
-        where: { email },
-        data: { status: 'active', otp_hash: null, otp_expiry: null }
-      });
-
-      return { success: true, message: 'Email verified successfully! You can now log in.' };
-    },
     createStaff: async (_: any, { email, password, displayName, role }: any, context: any) => {
       const user = requireRole(context, 'owner');
 

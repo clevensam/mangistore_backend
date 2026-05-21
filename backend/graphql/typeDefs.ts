@@ -22,11 +22,6 @@ export const authTypeDefs = `#graphql
     user: User!
   }
 
-  type RegisterPayload {
-    email: String!
-    message: String!
-  }
-
   type OtpPayload {
     message: String!
   }
@@ -43,7 +38,7 @@ export const authTypeDefs = `#graphql
 
   type Mutation {
     login(email: String!, password: String!): AuthPayload!
-    register(email: String!, password: String!, displayName: String!): RegisterPayload!
+    register(email: String!, password: String!, displayName: String!): AuthPayload!
     resendOtp(email: String!): OtpPayload!
     verifyOtp(email: String!, otp: String!): VerifyOtpPayload!
     createStaff(email: String!, password: String!, displayName: String!, role: String): User!
