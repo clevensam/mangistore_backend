@@ -14,6 +14,7 @@ import { expenseResolvers } from "./graphql/resolvers/expenses";
 import { analysisResolvers } from "./graphql/resolvers/analysis";
 import { dashboardResolvers } from "./graphql/resolvers/dashboard";
 import { createContext } from "./auth/context";
+import nodemailer from "nodemailer";
 import { verifyEmailConfig } from "./services/email";
 import { errorHandler } from "./middleware/errorHandler";
 
@@ -83,13 +84,29 @@ async function startServer() {
   });
 
   app.get("/api/debug/email-test", async (req, res) => {
-    try {
-      await verifyEmailConfig();
-      res.json({ ok: true, message: 'SMTP connection works' });
-    } catch (err) {
-      const error = err as Error;
-      res.json({ ok: false, message: error.message, code: (error as any).code });
+    const results: any = {};
+    for (const port of [587, 465]) {
+      try {
+        const t = nodemailer.createTransport({
+          host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+          port,
+          secure: port === 465,
+          auth: {
+            user: process.env.EMAIL_USER || '',
+            pass: process.env.EMAIL_PASSWORD || '',
+          },
+          connectionTimeout: 8000,
+          greetingTimeout: 8000,
+          tls: { rejectUnauthorized: false },
+        });
+        await t.verify();
+        results[`port_${port}`] = { ok: true };
+      } catch (err) {
+        const error = err as Error;
+        results[`port_${port}`] = { ok: false, message: error.message, code: (error as any).code };
+      }
     }
+    res.json(results);
   });
 
   app.use(errorHandler);
