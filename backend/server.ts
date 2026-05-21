@@ -72,6 +72,16 @@ async function startServer() {
     res.json({ status: "ok", message: "Server is running with GraphQL API" });
   });
 
+  app.get("/api/debug/email-env", (req, res) => {
+    res.json({
+      EMAIL_HOST: process.env.EMAIL_HOST ? 'set' : 'MISSING',
+      EMAIL_PORT: process.env.EMAIL_PORT ? 'set' : 'MISSING',
+      EMAIL_USER: process.env.EMAIL_USER ? 'set' : 'MISSING',
+      EMAIL_PASSWORD: process.env.EMAIL_PASSWORD ? 'set' : 'MISSING',
+      DEFAULT_FROM_EMAIL: process.env.DEFAULT_FROM_EMAIL ? 'set' : 'MISSING',
+    });
+  });
+
   app.use(errorHandler);
 
   app.listen(PORT, "0.0.0.0", () => {
