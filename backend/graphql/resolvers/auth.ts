@@ -66,6 +66,9 @@ export const authResolvers = {
         throw new Error('Invalid email or password');
       }
 
+      if (user.status === 'pending') {
+        throw new Error('Please verify your email first. Check your inbox for the verification code.');
+      }
       if (user.status !== 'active') {
         throw new Error('Account is inactive');
       }
@@ -102,9 +105,12 @@ export const authResolvers = {
             }
           });
 
-          sendOtpEmail(email, otp).catch(err => {
-            console.error('sendOtpEmail failed for', email, ':', err.message);
-          });
+          try {
+            await sendOtpEmail(email, otp);
+          } catch (err) {
+            console.error('sendOtpEmail failed:', err);
+            throw new Error('Failed to send verification email. Please try again.');
+          }
 
           return { email, message: 'An account with this email already exists but is pending verification. A new OTP has been sent.' };
         }
@@ -116,7 +122,7 @@ export const authResolvers = {
       const otpHash = await bcrypt.hash(otp, 10);
       const expiry = new Date(Date.now() + 15 * 60 * 1000);
 
-      await prisma.user.create({
+      const user = await prisma.user.create({
         data: {
           email,
           password_hash: passwordHash,
@@ -128,9 +134,13 @@ export const authResolvers = {
         }
       });
 
-      sendOtpEmail(email, otp).catch(err => {
-        console.error('sendOtpEmail failed for', email, ':', err.message);
-      });
+      try {
+        await sendOtpEmail(email, otp);
+      } catch (err) {
+        await prisma.user.delete({ where: { id: user.id } });
+        console.error('sendOtpEmail failed:', err);
+        throw new Error('Failed to send verification email. Please try again.');
+      }
 
       return { email, message: 'Account created! Check your email for the verification code.' };
     },
@@ -152,9 +162,12 @@ export const authResolvers = {
         data: { otp_hash: otpHash, otp_expiry: expiry }
       });
 
-      sendOtpEmail(email, otp).catch(err => {
-        console.error('sendOtpEmail failed for', email, ':', err.message);
-      });
+      try {
+        await sendOtpEmail(email, otp);
+      } catch (err) {
+        console.error('sendOtpEmail failed:', err);
+        throw new Error('Failed to send verification email. Please try again.');
+      }
 
       return { message: 'A new verification code has been sent to your email.' };
     },
