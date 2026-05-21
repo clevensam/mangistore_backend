@@ -14,6 +14,7 @@ import { expenseResolvers } from "./graphql/resolvers/expenses";
 import { analysisResolvers } from "./graphql/resolvers/analysis";
 import { dashboardResolvers } from "./graphql/resolvers/dashboard";
 import { createContext } from "./auth/context";
+import { verifyEmailConfig } from "./services/email";
 import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -53,6 +54,13 @@ async function startServer() {
   });
 
   await server.start();
+
+  try {
+    await verifyEmailConfig();
+    console.log('Email server is ready');
+  } catch (err) {
+    console.warn('Email server not available — OTP emails will not be sent:', (err as Error).message);
+  }
 
   app.use("/graphql", expressMiddleware(server, {
     context: async ({ req, res }) => {

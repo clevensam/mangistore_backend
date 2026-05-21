@@ -20,6 +20,10 @@ const transporter = nodemailer.createTransport({
 
 const FROM = process.env.DEFAULT_FROM_EMAIL || 'noreply@mangistore.com';
 
+export async function verifyEmailConfig(): Promise<void> {
+  await transporter.verify();
+}
+
 export async function sendOtpEmail(to: string, otp: string): Promise<void> {
   const mailOptions = {
     from: FROM,
