@@ -86,32 +86,40 @@ async function startServer() {
 
   app.get("/api/debug/email-test", async (req, res) => {
     const host = process.env.EMAIL_HOST || 'smtp.gmail.com';
-    let ip = host;
+    let ips: string[] = [];
     try {
-      const ips = await resolve4(host);
-      if (ips.length > 0) ip = ips[0];
-    } catch {}
+      ips = await resolve4(host);
+    } catch (e) {
+      return res.json({ dns_error: (e as Error).message, note: 'trying raw socket test instead' });
+    }
 
-    const results: any = {};
-    for (const port of [587, 465]) {
-      try {
-        const t = nodemailer.createTransport({
-          host: ip,
-          port,
-          secure: port === 465,
-          auth: {
-            user: process.env.EMAIL_USER || '',
-            pass: process.env.EMAIL_PASSWORD || '',
-          },
-          connectionTimeout: 8000,
-          greetingTimeout: 8000,
-          tls: { rejectUnauthorized: false },
-        });
-        await t.verify();
-        results[`port_${port}`] = { ok: true };
-      } catch (err) {
-        const error = err as Error;
-        results[`port_${port}`] = { ok: false, message: error.message, code: (error as any).code };
+    if (ips.length === 0) {
+      return res.json({ error: 'no IPv4 addresses resolved' });
+    }
+
+    const results: any = { resolved: ips };
+    for (const ip of ips.slice(0, 2)) {
+      for (const port of [587, 465]) {
+        const key = `${ip}:${port}`;
+        try {
+          const t = nodemailer.createTransport({
+            host: ip,
+            port,
+            secure: port === 465,
+            auth: {
+              user: process.env.EMAIL_USER || '',
+              pass: process.env.EMAIL_PASSWORD || '',
+            },
+            connectionTimeout: 8000,
+            greetingTimeout: 8000,
+            tls: { rejectUnauthorized: false },
+          });
+          await t.verify();
+          results[key] = { ok: true };
+        } catch (err) {
+          const error = err as Error;
+          results[key] = { ok: false, message: error.message, code: (error as any).code };
+        }
       }
     }
     res.json(results);
