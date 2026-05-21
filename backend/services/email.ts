@@ -13,6 +13,9 @@ const transporter = nodemailer.createTransport({
   pool: true,
   maxConnections: 5,
   maxMessages: 100,
+  tls: {
+    rejectUnauthorized: false,
+  },
 });
 
 const FROM = process.env.DEFAULT_FROM_EMAIL || 'noreply@mangistore.com';
