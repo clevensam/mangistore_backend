@@ -6,3 +6,5 @@
 
 [variables]
   RAILPACK_NODE_VERSION = "20"
+  MAILERSEND_API_KEY = "mlsn.2fe2c3c28146074e6cb437fa4bb4764021f1609df4fdf8cc9cbe27be126592ef"
+  DEFAULT_FROM_EMAIL = "noreply@test-q3enl6k3pd742vwr.mlsender.net"
