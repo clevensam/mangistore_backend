@@ -82,6 +82,16 @@ async function startServer() {
     });
   });
 
+  app.get("/api/debug/email-test", async (req, res) => {
+    try {
+      await verifyEmailConfig();
+      res.json({ ok: true, message: 'SMTP connection works' });
+    } catch (err) {
+      const error = err as Error;
+      res.json({ ok: false, message: error.message, code: (error as any).code });
+    }
+  });
+
   app.use(errorHandler);
 
   app.listen(PORT, "0.0.0.0", () => {
