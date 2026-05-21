@@ -102,7 +102,9 @@ export const authResolvers = {
             }
           });
 
-          await sendOtpEmail(email, otp).catch(() => {});
+          sendOtpEmail(email, otp).catch(err => {
+            console.error('sendOtpEmail failed for', email, ':', err.message);
+          });
 
           return { email, message: 'An account with this email already exists but is pending verification. A new OTP has been sent.' };
         }
@@ -126,8 +128,8 @@ export const authResolvers = {
         }
       });
 
-      await sendOtpEmail(email, otp).catch(() => {
-        console.error('Failed to send OTP email to', email);
+      sendOtpEmail(email, otp).catch(err => {
+        console.error('sendOtpEmail failed for', email, ':', err.message);
       });
 
       return { email, message: 'Account created! Check your email for the verification code.' };
@@ -150,8 +152,8 @@ export const authResolvers = {
         data: { otp_hash: otpHash, otp_expiry: expiry }
       });
 
-      await sendOtpEmail(email, otp).catch(() => {
-        console.error('Failed to resend OTP email to', email);
+      sendOtpEmail(email, otp).catch(err => {
+        console.error('sendOtpEmail failed for', email, ':', err.message);
       });
 
       return { message: 'A new verification code has been sent to your email.' };

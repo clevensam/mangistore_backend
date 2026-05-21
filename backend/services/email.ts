@@ -8,6 +8,11 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER || '',
     pass: process.env.EMAIL_PASSWORD || '',
   },
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  pool: true,
+  maxConnections: 5,
+  maxMessages: 100,
 });
 
 const FROM = process.env.DEFAULT_FROM_EMAIL || 'noreply@mangistore.com';
