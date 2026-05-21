@@ -14,6 +14,7 @@ import { expenseResolvers } from "./graphql/resolvers/expenses";
 import { analysisResolvers } from "./graphql/resolvers/analysis";
 import { dashboardResolvers } from "./graphql/resolvers/dashboard";
 import { createContext } from "./auth/context";
+import { resolve4 } from "dns/promises";
 import nodemailer from "nodemailer";
 import { verifyEmailConfig } from "./services/email";
 import { errorHandler } from "./middleware/errorHandler";
@@ -84,11 +85,18 @@ async function startServer() {
   });
 
   app.get("/api/debug/email-test", async (req, res) => {
+    const host = process.env.EMAIL_HOST || 'smtp.gmail.com';
+    let ip = host;
+    try {
+      const ips = await resolve4(host);
+      if (ips.length > 0) ip = ips[0];
+    } catch {}
+
     const results: any = {};
     for (const port of [587, 465]) {
       try {
         const t = nodemailer.createTransport({
-          host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+          host: ip,
           port,
           secure: port === 465,
           auth: {
