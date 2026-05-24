@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { ApolloServer } from "@apollo/server";
+import { ApolloServerPluginLandingPageLocalDefault } from "@apollo/server/plugin/landingPage/default";
 import { expressMiddleware } from "@as-integrations/express4";
 import bodyParser from "body-parser";
 import prisma from "./prisma";
@@ -24,8 +25,6 @@ app.use(cors({
   origin: process.env.FRONTEND_URL,
   credentials: true
 }));
-app.use(bodyParser.json());
-
 const resolvers = {
   Query: {
     ...authResolvers.Query,
@@ -51,6 +50,7 @@ async function startServer() {
   const server = new ApolloServer({
     typeDefs,
     resolvers,
+    plugins: [ApolloServerPluginLandingPageLocalDefault()],
   });
 
   await server.start();
@@ -62,11 +62,17 @@ async function startServer() {
     console.warn('Email server not available — OTP emails will not be sent:', (err as Error).message);
   }
 
-  app.use("/graphql", expressMiddleware(server, {
-    context: async ({ req, res }) => {
-      return await createContext(req, res);
-    }
-  }));
+  app.use(
+    "/graphql",
+    (req, _res, next) => {
+      req.body = req.body || {};
+      next();
+    },
+    bodyParser.json(),
+    expressMiddleware(server, {
+      context: async ({ req, res }) => createContext(req, res),
+    }),
+  );
 
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", message: "Server is running with GraphQL API" });

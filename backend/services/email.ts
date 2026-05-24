@@ -1,28 +1,31 @@
-import { MailerSend, EmailParams, Sender, Recipient } from "mailersend";
+import nodemailer from 'nodemailer';
 
-const mailerSend = new MailerSend({
-  apiKey: process.env.MAILERSEND_API_KEY || '',
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
 });
 
 const FROM_EMAIL = process.env.DEFAULT_FROM_EMAIL || 'noreply@mangistore.com';
 const FROM_NAME = 'Mangi Store';
 
 export async function verifyEmailConfig(): Promise<void> {
-  if (!process.env.MAILERSEND_API_KEY) {
-    throw new Error('MAILERSEND_API_KEY is not set');
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    throw new Error('SMTP credentials not set');
   }
+  await transporter.verify();
 }
 
 export async function sendOtpEmail(to: string, otp: string): Promise<void> {
-  const sentFrom = new Sender(FROM_EMAIL, FROM_NAME);
-  const recipients = [new Recipient(to)];
-
-  const emailParams = new EmailParams()
-    .setFrom(sentFrom)
-    .setTo(recipients)
-    .setReplyTo(sentFrom)
-    .setSubject('Your Mangi Store Verification Code')
-    .setHtml(`
+  await transporter.sendMail({
+    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    to,
+    subject: 'Your Mangi Store Verification Code',
+    html: `
       <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background: #ffffff; border-radius: 16px; border: 1px solid #f1f5f9;">
         <div style="text-align: center; margin-bottom: 24px;">
           <h1 style="color: #ea580c; font-size: 24px; margin: 0;">Mangi Store</h1>
@@ -36,7 +39,6 @@ export async function sendOtpEmail(to: string, otp: string): Promise<void> {
         <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0 0;" />
         <p style="color: #cbd5e1; font-size: 12px; text-align: center; margin: 12px 0 0;">&copy; ${new Date().getFullYear()} Mangi Store. All rights reserved.</p>
       </div>
-    `);
-
-  await mailerSend.email.send(emailParams);
+    `,
+  });
 }
