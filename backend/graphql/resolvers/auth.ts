@@ -40,7 +40,7 @@ export const authResolvers = {
           }
         }
       });
-      return staffMembers.map(sm => ({
+      return staffMembers.map((sm: any) => ({
         id: sm.staff.id,
         email: sm.staff.email,
         displayName: sm.staff.display_name,

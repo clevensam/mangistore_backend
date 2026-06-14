@@ -36,6 +36,8 @@ export class CustomerRepository {
   }
 
   async update(id: string, ownerId: string, updates: Partial<CustomerInput & { status: string }>) {
+    const existing = await this.getById(id, ownerId);
+    if (!existing) throw new Error('Customer not found');
     return prisma.customer.update({
       where: { id },
       data: updates
@@ -43,6 +45,8 @@ export class CustomerRepository {
   }
 
   async delete(id: string, ownerId: string) {
+    const existing = await this.getById(id, ownerId);
+    if (!existing) throw new Error('Customer not found');
     await prisma.customer.delete({ where: { id } });
     return true;
   }

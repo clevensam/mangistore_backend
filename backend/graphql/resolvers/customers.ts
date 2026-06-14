@@ -7,7 +7,7 @@ export const customerResolvers = {
       const user = requireAuth(context);
       const ownerId = await getEffectiveOwnerId(context);
       const customers = await customerRepository.getAll(ownerId);
-      return customers.map(c => ({
+      return customers.map((c: any) => ({
         id: c.id,
         name: c.name,
         phone: c.phone || '',

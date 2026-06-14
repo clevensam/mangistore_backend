@@ -15,8 +15,7 @@ export const expenseResolvers = {
     operatingExpense: async (_: any, { id }: { id: string }, context: any) => {
       const user = requireRole(context, 'owner', 'manager');
       const ownerId = await getEffectiveOwnerId(context);
-      const expenses = await operatingExpenseRepository.getAll(ownerId);
-      return expenses.find(e => e.id === id);
+      return await operatingExpenseRepository.getById(id, ownerId);
     },
 
     expenseTotalsByCategory: async (_: any, __: any, context: any) => {

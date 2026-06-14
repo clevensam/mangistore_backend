@@ -10,7 +10,7 @@ export const debtResolvers = {
         type = 'receivable';
       }
       const debts = await debtRepository.getAll(ownerId, type);
-      return debts.map(d => ({
+      return debts.map((d: any) => ({
         id: d.id,
         type: d.type,
         customerId: d.customer_id || null,
@@ -67,7 +67,7 @@ export const debtResolvers = {
       const user = requireAuth(context);
       const ownerId = await getEffectiveOwnerId(context);
       const payments = await debtPaymentRepository.getByDebtId(debtId, ownerId);
-      return payments.map(p => ({
+      return payments.map((p: any) => ({
         id: p.id,
         debtId: p.debt_id,
         amount: Number(p.amount) || 0,

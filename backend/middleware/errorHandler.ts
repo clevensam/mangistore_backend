@@ -1,4 +1,4 @@
-export const errorHandler = (
+    export const errorHandler = (
   error: any,
   req: any,
   res: any,

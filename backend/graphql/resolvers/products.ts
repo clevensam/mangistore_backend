@@ -7,7 +7,7 @@ export const productResolvers = {
       const user = requireAuth(context);
       const ownerId = await getEffectiveOwnerId(context);
       const products = await productRepository.getAll(ownerId);
-      return products.map(p => ({
+      return products.map((p: any) => ({
         id: p.id,
         name: p.name,
         category: p.category || '',
@@ -55,7 +55,7 @@ export const productResolvers = {
       const user = requireAuth(context);
       const ownerId = await getEffectiveOwnerId(context);
       const sales = await saleRepository.getByProductId(productId, ownerId);
-      return sales.map(s => ({
+      return sales.map((s: any) => ({
         id: s.id,
         product_id: s.product_id,
         quantity: s.quantity,

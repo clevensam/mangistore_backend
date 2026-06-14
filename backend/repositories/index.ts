@@ -39,6 +39,8 @@ export class ProductRepository {
   }
 
   async update(id: string, ownerId: string, updates: Partial<ProductInput>) {
+    const existing = await this.getById(id, ownerId);
+    if (!existing) throw new Error('Product not found');
     return prisma.product.update({
       where: { id },
       data: updates
@@ -46,15 +48,10 @@ export class ProductRepository {
   }
 
   async delete(id: string, ownerId: string) {
+    const existing = await this.getById(id, ownerId);
+    if (!existing) throw new Error('Product not found');
     await prisma.product.delete({ where: { id } });
     return true;
-  }
-
-  async updateQuantity(id: string, ownerId: string, quantity: number) {
-    const product = await this.getById(id, ownerId);
-    if (product) {
-      await this.update(id, ownerId, { quantity: product.quantity + quantity } as any);
-    }
   }
 
   async decrementQuantity(id: string, ownerId: string, quantity: number) {
@@ -240,7 +237,15 @@ export class OperatingExpenseRepository {
     });
   }
 
+  async getById(id: string, ownerId: string) {
+    return prisma.operatingExpense.findFirst({
+      where: { id, owner_id: ownerId }
+    });
+  }
+
   async update(id: string, ownerId: string, updates: Partial<OperatingExpenseInput>) {
+    const existing = await this.getById(id, ownerId);
+    if (!existing) throw new Error('Expense not found');
     const data: any = { ...updates };
     if (updates.expense_date) {
       data.expense_date = new Date(updates.expense_date);
@@ -252,6 +257,8 @@ export class OperatingExpenseRepository {
   }
 
   async delete(id: string, ownerId: string) {
+    const existing = await this.getById(id, ownerId);
+    if (!existing) throw new Error('Expense not found');
     await prisma.operatingExpense.delete({ where: { id } });
     return true;
   }
@@ -263,7 +270,7 @@ export class OperatingExpenseRepository {
     });
 
     const totals: Record<string, number> = {};
-    expenses.forEach(item => {
+    expenses.forEach((item: any) => {
       totals[item.category] = (totals[item.category] || 0) + Number(item.amount);
     });
     return totals;
@@ -283,7 +290,7 @@ export class OperatingExpenseRepository {
       select: { amount: true }
     });
 
-    return expenses.reduce((sum, item) => sum + Number(item.amount), 0);
+    return expenses.reduce((sum: number, item: any) => sum + Number(item.amount), 0);
   }
 }
 

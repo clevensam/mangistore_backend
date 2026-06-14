@@ -48,6 +48,8 @@ export class DebtRepository {
   }
 
   async updatePayment(debtId: string, ownerId: string, amountPaid: number, newStatus: 'partial' | 'paid') {
+    const existing = await this.getById(debtId, ownerId);
+    if (!existing) throw new Error('Debt not found');
     return prisma.debt.update({
       where: { id: debtId },
       data: {
@@ -59,6 +61,8 @@ export class DebtRepository {
   }
 
   async delete(id: string, ownerId: string) {
+    const existing = await this.getById(id, ownerId);
+    if (!existing) throw new Error('Debt not found');
     await prisma.debt.delete({ where: { id } });
     return true;
   }
