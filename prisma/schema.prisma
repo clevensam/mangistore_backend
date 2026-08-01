@@ -40,7 +40,7 @@ model BusinessSetting {
   created_at        DateTime @default(now())
   updated_at        DateTime @updatedAt
 
-  owner User @relation(fields: [owner_id], references: [id])
+  owner User @relation(fields: [owner_id], references: [id], onDelete: Cascade)
 
   @@map("business_settings")
 }
@@ -51,8 +51,8 @@ model StaffMember {
   staff_user_id String   @unique
   created_at    DateTime @default(now())
 
-  owner User @relation("OwnerToStaff", fields: [owner_id], references: [id])
-  staff User @relation("StaffToOwner", fields: [staff_user_id], references: [id])
+  owner User @relation("OwnerToStaff", fields: [owner_id], references: [id], onDelete: Cascade)
+  staff User @relation("StaffToOwner", fields: [staff_user_id], references: [id], onDelete: Cascade)
 
   @@unique([owner_id, staff_user_id])
   @@map("staff_members")
@@ -68,7 +68,7 @@ model Customer {
   status     String   @default("active")
   created_at DateTime @default(now())
 
-  owner User @relation(fields: [owner_id], references: [id])
+  owner User @relation(fields: [owner_id], references: [id], onDelete: Cascade)
   debts Debt[]
 
   @@index([owner_id])
@@ -82,13 +82,13 @@ model Product {
   owner_id           String
   name               String
   category           String?
-  buying_price       Float?
-  selling_price      Float?
+  buying_price       Decimal?
+  selling_price      Decimal?
   quantity           Int      @default(0)
   low_stock_threshold Int     @default(5)
   created_at         DateTime @default(now())
 
-  owner User @relation(fields: [owner_id], references: [id])
+  owner User @relation(fields: [owner_id], references: [id], onDelete: Cascade)
   sales Sale[]
 
   @@index([owner_id])
@@ -102,11 +102,11 @@ model Sale {
   owner_id    String
   product_id  String
   quantity    Int
-  total_price Float
+  total_price Decimal
   created_at  DateTime @default(now())
 
-  owner   User    @relation(fields: [owner_id], references: [id])
-  product Product @relation(fields: [product_id], references: [id])
+  owner   User    @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
 
   @@index([owner_id])
   @@index([product_id])
@@ -120,15 +120,15 @@ model Debt {
   type         String
   customer_id  String?
   supplier_name String?
-  amount       Float
-  amount_paid  Float    @default(0)
+  amount       Decimal
+  amount_paid  Decimal  @default(0)
   due_date     DateTime
   status       String   @default("pending")
   description  String?
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 
-  owner    User          @relation(fields: [owner_id], references: [id])
+  owner    User          @relation(fields: [owner_id], references: [id], onDelete: Cascade)
   customer Customer?     @relation(fields: [customer_id], references: [id])
   payments DebtPayment[]
 
@@ -144,12 +144,12 @@ model DebtPayment {
   id           String   @id @default(cuid())
   owner_id     String
   debt_id      String
-  amount       Float
+  amount       Decimal
   payment_date DateTime @default(now())
   notes        String?
 
-  owner User @relation(fields: [owner_id], references: [id])
-  debt  Debt @relation(fields: [debt_id], references: [id])
+  owner User @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+  debt  Debt @relation(fields: [debt_id], references: [id], onDelete: Cascade)
 
   @@index([owner_id])
   @@index([debt_id])
@@ -161,13 +161,13 @@ model OperatingExpense {
   owner_id    String
   category    String
   description String?
-  amount      Float
+  amount      Decimal
   expense_date DateTime
   status      String   @default("paid")
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
 
-  owner User @relation(fields: [owner_id], references: [id])
+  owner User @relation(fields: [owner_id], references: [id], onDelete: Cascade)
 
   @@index([owner_id])
   @@index([category])
