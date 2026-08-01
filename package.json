@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "tsx backend/server.ts",
-    "start": "tsx backend/server.ts",
+    "start": "prisma db push --skip-generate && tsx backend/server.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { execSync } from "node:child_process";
 import express from "express";
 import cors from "cors";
 import { ApolloServer } from "@apollo/server";
@@ -46,6 +47,21 @@ const resolvers = {
   ExpenseCategoryTotal: expenseResolvers.ExpenseCategoryTotal
 };
 
+async function ensureSchema() {
+  try {
+    const tables = await prisma.$queryRaw<{ name: string }[]>`
+      SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'profiles'
+    `;
+    if (tables.length === 0) {
+      console.log("Database schema missing — running prisma db push...");
+      execSync("npx prisma db push --skip-generate", { stdio: "inherit" });
+      console.log("Database schema created.");
+    }
+  } catch (err) {
+    console.warn("Schema check failed, continuing:", (err as Error).message);
+  }
+}
+
 async function startServer() {
   const server = new ApolloServer({
     typeDefs,
@@ -54,6 +70,8 @@ async function startServer() {
   });
 
   await server.start();
+
+  await ensureSchema();
 
   try {
     await verifyEmailConfig();

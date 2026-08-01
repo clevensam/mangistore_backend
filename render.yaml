@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     buildCommand: npm install
-    startCommand: npx prisma db push && npm run start
+    startCommand: npm run start
     healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
@@ -25,7 +25,3 @@ services:
         sync: false
       - key: DEFAULT_FROM_EMAIL
         value: noreply@mangistore.com
-    disk:
-      name: sqlite-data
-      mountPath: /data
-      sizeGB: 1

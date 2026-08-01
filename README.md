@@ -41,17 +41,22 @@ npm run dev
 
 ```bash
 npm run dev      # Start dev server
-npm run start    # Start production server
+npm run start    # Start production server (applies SQLite schema first)
 npm run lint     # Type check
 ```
+
+The app self-creates the SQLite schema on boot: `start` runs `prisma db push`
+first, and the server also checks on startup that the `profiles` table exists,
+running `prisma db push` automatically if the database is empty.
 
 ## Deployment to Render
 
 1. Connect your GitHub repo to Render as a Blueprint (or New Web Service)
-2. Use the `render.yaml` blueprint in this repo — it provisions the web service, env vars, and a persistent disk at `/data`
+2. Use the `render.yaml` blueprint in this repo — it provisions the web service and env vars
 3. Set the `sync: false` secrets in the Render dashboard when prompted: `GEMINI_API_KEY`, `JWT_SECRET`, `FRONTEND_URL`, `SMTP_PASS`
 
 Key points:
-- The start command runs `npx prisma db push` first so the SQLite schema is applied to the persistent disk on every boot
-- `DATABASE_URL` must be `file:/data/mangistore.db` on Render so data survives redeploys (the disk is never wiped)
+- The start command (`npm run start`) applies the SQLite schema on every boot, so tables are created automatically even on a fresh/empty database
+- `DATABASE_URL` is `file:/data/mangistore.db`
+- **Free tier caveat:** Render's free services have an ephemeral filesystem — the database (and any data) is reset on every spin-down, restart, or redeploy. The schema is re-created on boot. For persistent data, upgrade to a paid plan (Starter) and add a persistent disk mounted at `/data`
 - Health check: `GET /api/health`
