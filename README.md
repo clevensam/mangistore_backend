@@ -7,9 +7,9 @@ GraphQL API backend for Mangi Store POS system, built with Apollo Server + Expre
 - **Runtime:** Node.js with TypeScript
 - **Server:** Express.js
 - **API:** Apollo Server (GraphQL)
-- **Database:** Supabase (PostgreSQL + Auth)
+- **Database:** SQLite via Prisma ORM
 - **AI:** Google Gemini API
-- **Deployment:** Railway
+- **Deployment:** Render
 
 ## Setup
 
@@ -24,13 +24,12 @@ npm run dev
 
 | Variable | Description |
 |----------|-------------|
+| `DATABASE_URL` | SQLite file URL, e.g. `file:./dev.db` (local) or `file:/data/mangistore.db` (Render disk) |
 | `GEMINI_API_KEY` | Google Gemini API key |
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_ANON_KEY` | Supabase anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
 | `JWT_SECRET` | Secret for signing JWT tokens |
 | `FRONTEND_URL` | Frontend URL for CORS |
 | `PORT` | Server port (default: 3000) |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `DEFAULT_FROM_EMAIL` | SMTP (Brevo) for OTP emails |
 
 ## API Endpoints
 
@@ -46,16 +45,13 @@ npm run start    # Start production server
 npm run lint     # Type check
 ```
 
-## Deployment to Railway
+## Deployment to Render
 
-1. Connect your GitHub repo to Railway
-2. Set the environment variables in Railway dashboard
-3. Railway will auto-detect and deploy
+1. Connect your GitHub repo to Render as a Blueprint (or New Web Service)
+2. Use the `render.yaml` blueprint in this repo — it provisions the web service, env vars, and a persistent disk at `/data`
+3. Set the `sync: false` secrets in the Render dashboard when prompted: `GEMINI_API_KEY`, `JWT_SECRET`, `FRONTEND_URL`, `SMTP_PASS`
 
-Required Railway variables:
-- `PORT=3000`
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `JWT_SECRET`
-- `FRONTEND_URL` (your Vercel frontend URL)
+Key points:
+- The start command runs `npx prisma db push` first so the SQLite schema is applied to the persistent disk on every boot
+- `DATABASE_URL` must be `file:/data/mangistore.db` on Render so data survives redeploys (the disk is never wiped)
+- Health check: `GET /api/health`

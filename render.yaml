@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: mangistore-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npx prisma db push && npm run start
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        value: file:/data/mangistore.db
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: SMTP_HOST
+        value: smtp-relay.brevo.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        value: 9ced72001@smtp-brevo.com
+      - key: SMTP_PASS
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        value: noreply@mangistore.com
+    disk:
+      name: sqlite-data
+      mountPath: /data
+      sizeGB: 1
