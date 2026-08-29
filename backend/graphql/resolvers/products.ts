@@ -1,4 +1,4 @@
-import { productRepository, saleRepository } from '../../repositories';
+import { productRepository, saleRepository, stockRepository } from '../../repositories';
 import { requireAuth, requireRole, getEffectiveOwnerId } from '../../auth/context';
 
 export const productResolvers = {
@@ -69,6 +69,22 @@ export const productResolvers = {
       const start = new Date(startDate);
       const end = new Date(endDate);
       return saleRepository.getSalesReport(ownerId, start, end);
+    },
+    stockSheet: async (_: any, { weekDate }: any, context: any) => {
+      const user = requireAuth(context);
+      const ownerId = await getEffectiveOwnerId(context);
+      const weekStart = new Date(weekDate);
+      weekStart.setHours(0, 0, 0, 0);
+      const entries = await stockRepository.getForWeek(ownerId, weekStart);
+      return entries.map((e: any) => ({
+        id: e.id,
+        productId: e.product_id,
+        weekday: e.weekday,
+        in: e.in,
+        jumla: e.jumla,
+        uza: e.uza,
+        baki: e.baki,
+      }));
     }
   },
   Mutation: {
@@ -161,6 +177,34 @@ export const productResolvers = {
 
         throw error;
       }
+    },
+    saveStockSheet: async (_: any, { weekDate, entries }: any, context: any) => {
+      const user = requireRole(context, 'owner', 'manager');
+      const ownerId = await getEffectiveOwnerId(context);
+
+      const products = await productRepository.getAll(ownerId);
+      const validIds = new Set(products.map((p: any) => p.id));
+
+      const cleaned = (entries as any[]).filter((e) => validIds.has(e.productId));
+
+      const weekStart = new Date(weekDate);
+      weekStart.setHours(0, 0, 0, 0);
+
+      await stockRepository.upsertAll(
+        ownerId,
+        weekStart,
+        cleaned.map((e) => ({
+          productId: e.productId,
+          weekday: Math.min(6, Math.max(0, Math.floor(e.weekday || 0))),
+          in: Math.floor(e.in || 0),
+          jumla: Math.floor(e.jumla || 0),
+          uza: Math.floor(e.uza || 0),
+          baki: Math.floor(e.baki || 0),
+        })),
+        [...validIds],
+      );
+
+      return true;
     }
   }
 };

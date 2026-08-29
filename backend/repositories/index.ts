@@ -295,3 +295,70 @@ export class OperatingExpenseRepository {
 }
 
 export const operatingExpenseRepository = new OperatingExpenseRepository();
+
+export interface StockEntryInput {
+  productId: string;
+  weekday: number;
+  in: number;
+  jumla: number;
+  uza: number;
+  baki: number;
+}
+
+export class StockRepository {
+  async getForWeek(ownerId: string, weekDate: Date) {
+    return prisma.stockEntry.findMany({
+      where: {
+        owner_id: ownerId,
+        week_date: weekDate,
+      },
+    });
+  }
+
+  async upsertAll(ownerId: string, weekDate: Date, entries: StockEntryInput[], productIds: string[]) {
+    const weekStart = new Date(weekDate);
+    weekStart.setHours(0, 0, 0, 0);
+
+    // Remove saved entries for products no longer present (deleted this week)
+    await prisma.stockEntry.deleteMany({
+      where: {
+        owner_id: ownerId,
+        week_date: weekStart,
+        product_id: { notIn: productIds.length ? productIds : ['__none__'] },
+      },
+    });
+
+    for (const e of entries) {
+      await prisma.stockEntry.upsert({
+        where: {
+          owner_id_product_id_week_date_weekday: {
+            owner_id: ownerId,
+            product_id: e.productId,
+            week_date: weekStart,
+            weekday: e.weekday,
+          },
+        },
+        create: {
+          owner_id: ownerId,
+          product_id: e.productId,
+          week_date: weekStart,
+          weekday: e.weekday,
+          in: e.in,
+          jumla: e.jumla,
+          uza: e.uza,
+          baki: e.baki,
+        },
+        update: {
+          in: e.in,
+          jumla: e.jumla,
+          uza: e.uza,
+          baki: e.baki,
+        },
+      });
+    }
+
+    return true;
+  }
+}
+
+export const stockRepository = new StockRepository();

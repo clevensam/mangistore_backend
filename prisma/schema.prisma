@@ -24,6 +24,7 @@ model User {
   customers          Customer[]
   products           Product[]
   sales              Sale[]
+  stock_entries      StockEntry[]
   debts              Debt[]
   debt_payments      DebtPayment[]
   operating_expenses OperatingExpense[]
@@ -90,11 +91,33 @@ model Product {
 
   owner User @relation(fields: [owner_id], references: [id], onDelete: Cascade)
   sales Sale[]
+  stock_entries StockEntry[]
 
   @@index([owner_id])
   @@index([category])
   @@index([name])
   @@map("products")
+}
+
+model StockEntry {
+  id         String   @id @default(cuid())
+  owner_id   String
+  product_id String
+  week_date  DateTime // the Monday that starts the week
+  weekday    Int      // 0=Mon .. 6=Sun
+  in         Int      @default(0)
+  jumla      Int      @default(0)
+  uza        Int      @default(0)
+  baki       Int      @default(0)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  owner   User    @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
+
+  @@unique([owner_id, product_id, week_date, weekday])
+  @@index([owner_id, week_date])
+  @@map("stock_entries")
 }
 
 model Sale {

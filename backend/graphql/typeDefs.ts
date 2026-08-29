@@ -138,12 +138,32 @@ export const productTypeDefs = `#graphql
     summary: SalesReportSummary!
   }
 
+  type StockEntry {
+    id: ID!
+    productId: ID!
+    weekday: Int!
+    in: Int!
+    jumla: Int!
+    uza: Int!
+    baki: Int!
+  }
+
+  input StockEntryInput {
+    productId: ID!
+    weekday: Int!
+    in: Int!
+    jumla: Int!
+    uza: Int!
+    baki: Int!
+  }
+
   type Query {
     products: [Product!]!
     sales(startDate: String, endDate: String): [Sale!]!
     product(id: ID!): Product
     productSales(productId: ID!): [Sale!]
     salesReport(startDate: String!, endDate: String!): SalesReport!
+    stockSheet(weekDate: String!): [StockEntry!]!
   }
 
   type Mutation {
@@ -151,6 +171,7 @@ export const productTypeDefs = `#graphql
     updateProduct(id: ID!, name: String, category: String, buying_price: Float, selling_price: Float, quantity: Int, low_stock_threshold: Int): Product
     deleteProduct(id: ID!): Boolean!
     recordSale(productId: ID!, quantity: Int!, totalPrice: Float!): Sale!
+    saveStockSheet(weekDate: String!, entries: [StockEntryInput!]!): Boolean!
   }
 `;
 
