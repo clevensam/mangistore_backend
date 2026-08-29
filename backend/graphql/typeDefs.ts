@@ -176,7 +176,7 @@ export const productTypeDefs = `#graphql
   }
 
   type Mutation {
-    createProduct(name: String!, category: String!, buying_price: Float!, selling_price: Float!, quantity: Int!, low_stock_threshold: Int!): Product!
+    createProduct(name: String!, category: String!, buying_price: Float!, selling_price: Float!, quantity: Int, low_stock_threshold: Int!): Product!
     updateProduct(id: ID!, name: String, category: String, buying_price: Float, selling_price: Float, quantity: Int, low_stock_threshold: Int): Product
     deleteProduct(id: ID!): Boolean!
     recordSale(productId: ID!, quantity: Int!, totalPrice: Float!, recordOrder: Boolean = false): Sale!
