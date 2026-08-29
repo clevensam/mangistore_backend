@@ -359,6 +359,32 @@ export class StockRepository {
 
     return true;
   }
+
+  // Latest saved Baki (remaining stock) per product — from the most recent week
+  // that has stock entries, taking the last recorded weekday for each product.
+  async getLatestBaki(ownerId: string): Promise<Array<{ product_id: string; baki: number; week_date: Date; product: { name: string; category: string | null } }>> {
+    const latest = await prisma.stockEntry.findFirst({
+      where: { owner_id: ownerId },
+      orderBy: { week_date: 'desc' },
+      select: { week_date: true },
+    });
+    if (!latest) return [];
+
+    const entries = await prisma.stockEntry.findMany({
+      where: { owner_id: ownerId, week_date: latest.week_date },
+      orderBy: [{ weekday: 'desc' }, { product_id: 'asc' }],
+      include: { product: { select: { name: true, category: true } } },
+    });
+
+    const seen = new Set<string>();
+    const result: Array<{ product_id: string; baki: number; week_date: Date; product: { name: string; category: string | null } }> = [];
+    for (const e of entries) {
+      if (seen.has(e.product_id)) continue;
+      seen.add(e.product_id);
+      result.push({ product_id: e.product_id, baki: e.baki, week_date: e.week_date, product: e.product });
+    }
+    return result;
+  }
 }
 
 export const stockRepository = new StockRepository();

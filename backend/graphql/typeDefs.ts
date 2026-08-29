@@ -148,6 +148,14 @@ export const productTypeDefs = `#graphql
     baki: Int!
   }
 
+  type StockBaki {
+    productId: ID!
+    productName: String!
+    category: String!
+    baki: Int!
+    weekDate: String!
+  }
+
   input StockEntryInput {
     productId: ID!
     weekday: Int!
@@ -164,6 +172,7 @@ export const productTypeDefs = `#graphql
     productSales(productId: ID!): [Sale!]
     salesReport(startDate: String!, endDate: String!): SalesReport!
     stockSheet(weekDate: String!): [StockEntry!]!
+    latestStockBaki: [StockBaki!]!
   }
 
   type Mutation {

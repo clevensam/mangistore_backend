@@ -85,6 +85,18 @@ export const productResolvers = {
         uza: e.uza,
         baki: e.baki,
       }));
+    },
+    latestStockBaki: async (_: any, __: any, context: any) => {
+      const user = requireAuth(context);
+      const ownerId = await getEffectiveOwnerId(context);
+      const latest = await stockRepository.getLatestBaki(ownerId);
+      return latest.map((e: any) => ({
+        productId: e.product_id,
+        productName: e.product.name,
+        category: e.product.category || '',
+        baki: e.baki,
+        weekDate: e.week_date.toISOString(),
+      }));
     }
   },
   Mutation: {
