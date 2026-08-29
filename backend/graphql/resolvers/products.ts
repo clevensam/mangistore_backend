@@ -201,26 +201,48 @@ export const productResolvers = {
         days[weekday].uza += qty;
         days = recomputeWeekDays(days);
 
+        // Persist the product's week sheet (bulk delete + createMany).
         await saveProductWeek(ownerId, weekStart, productId, days, tx);
-        await deriveSalesForWeek(ownerId, weekStart, tx);
-        await syncProductQuantities(ownerId, tx);
+
+        const soldDate = new Date(weekStart);
+        soldDate.setDate(weekStart.getDate() + weekday);
+
+        // Update only this product's derived sale row (the whole-week re-derive
+        // was heavy: this product is the only one that changed this call).
+        const soldQty = days[weekday].uza;
+        const soldPrice = (Number(product.selling_price) || 0) * soldQty;
+        let saleId = '';
+        await tx.sale.deleteMany({
+          where: { owner_id: ownerId, product_id: productId, created_at: soldDate },
+        });
+        if (soldQty > 0) {
+          const created = await tx.sale.create({
+            data: {
+              owner_id: ownerId,
+              product_id: productId,
+              quantity: soldQty,
+              total_price: soldPrice,
+              created_at: soldDate,
+            },
+          });
+          saleId = created.id;
+        }
+
+        // Sync only this product's quantity to its latest (final) Baki.
+        await tx.product.update({
+          where: { id: productId },
+          data: { quantity: days[days.length - 1]?.baki ?? 0 },
+        });
 
         if (recordOrder) {
           await createOrder(ownerId, tx);
         }
 
-        const soldDate = new Date(weekStart);
-        soldDate.setDate(weekStart.getDate() + weekday);
-
-        const derived = await tx.sale.findFirst({
-          where: { owner_id: ownerId, product_id: productId, created_at: soldDate },
-        });
-
         return {
-          id: derived?.id || '',
+          id: saleId,
           product_id: productId,
-          quantity: days[weekday].uza,
-          total_price: (Number(product.selling_price) || 0) * days[weekday].uza,
+          quantity: soldQty,
+          total_price: soldPrice,
           created_at: soldDate,
         };
       });
