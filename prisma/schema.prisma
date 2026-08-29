@@ -25,6 +25,7 @@ model User {
   products           Product[]
   sales              Sale[]
   stock_entries      StockEntry[]
+  orders             Order[]
   debts              Debt[]
   debt_payments      DebtPayment[]
   operating_expenses OperatingExpense[]
@@ -135,6 +136,20 @@ model Sale {
   @@index([product_id])
   @@index([created_at])
   @@map("sales")
+}
+
+// One row per POS checkout — the source of "orders" counts.
+// The weekly stock-sheet (via UZA) remains the source of sales amounts.
+model Order {
+  id         String   @id @default(cuid())
+  owner_id   String
+  created_at DateTime @default(now())
+
+  owner User @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+
+  @@index([owner_id])
+  @@index([created_at])
+  @@map("orders")
 }
 
 model Debt {

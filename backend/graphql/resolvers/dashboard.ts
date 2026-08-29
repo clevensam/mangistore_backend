@@ -1,5 +1,6 @@
 import { productRepository, saleRepository } from '../../repositories';
 import { requireAuth, getEffectiveOwnerId } from '../../auth/context';
+import prisma from '../../prisma';
 
 export const dashboardResolvers = {
   Query: {
@@ -23,7 +24,11 @@ export const dashboardResolvers = {
       });
 
       const todaySalesTotal = todaySales.reduce((sum: number, s: any) => sum + s.total_price, 0);
-      const todayOrderCount = todaySales.length;
+
+      // "Orders today" = number of POS checkouts recorded today (Order rows).
+      const todayOrderCount = await prisma.order.count({
+        where: { owner_id: ownerId, created_at: { gte: todayStart, lte: todayEnd } },
+      });
 
       const lowStockCount = products.filter((p: any) => p.quantity <= p.low_stock_threshold && p.quantity > 0).length;
 

@@ -1,5 +1,17 @@
+import prisma from '../../prisma';
 import { productRepository, saleRepository, stockRepository } from '../../repositories';
 import { requireAuth, requireRole, getEffectiveOwnerId } from '../../auth/context';
+import {
+  mondayOf,
+  weekdayIndexOf,
+  deriveSalesForWeek,
+  syncProductQuantities,
+  getProductWeekDays,
+  recomputeWeekDays,
+  saveProductWeek,
+  createOrder,
+  upsertWeekEntries,
+} from '../../services/stockService';
 
 export const productResolvers = {
   Query: {
@@ -151,44 +163,69 @@ export const productResolvers = {
         throw error;
       }
     },
-    recordSale: async (_: any, { productId, quantity, totalPrice }: any, context: any) => {
+    recordSale: async (_: any, { productId, quantity, totalPrice, recordOrder }: any, context: any) => {
       const user = requireAuth(context);
       const ownerId = await getEffectiveOwnerId(context);
-      try {
-        const sale = await saleRepository.recordSale(ownerId, productId, quantity, totalPrice);
-        return {
-          id: sale.id,
-          product_id: sale.product_id,
-          quantity: sale.quantity,
-          total_price: sale.total_price,
-          created_at: sale.created_at
-        };
-      } catch (error: any) {
-        const message = error.message || '';
 
-        if (message === 'PRODUCT_NOT_FOUND') {
-          throw new Error('Product not found');
-        }
-
-        if (message === 'OUT_OF_STOCK') {
-          throw new Error('This product is out of stock');
-        }
-
-        if (message.startsWith('INSUFFICIENT_STOCK:')) {
-          const available = message.split(':')[1];
-          throw new Error(`Insufficient stock. Only ${available} available`);
-        }
-
-        if (message === 'SALE_RECORD_FAILED') {
-          throw new Error('Failed to record sale. Please try again');
-        }
-
-        if (message === 'STOCK_UPDATE_FAILED') {
-          throw new Error('Failed to update stock. Sale was not recorded');
-        }
-
-        throw error;
+      const product = await productRepository.getById(productId, ownerId);
+      if (!product) {
+        throw new Error('PRODUCT_NOT_FOUND');
       }
+      // record personnel can sell; this mutation only writes into the current week's sheet
+      const qty = Math.max(0, Math.floor(quantity || 0));
+      if (qty <= 0) {
+        throw new Error('Quantity must be greater than zero');
+      }
+
+      // Availability is driven by the latest saved Baki (products.quantity is kept in sync).
+      const available = Number(product.quantity) || 0;
+      if (available === 0) {
+        throw new Error('OUT_OF_STOCK');
+      }
+      if (qty > available) {
+        throw new Error(`INSUFFICIENT_STOCK:${available}`);
+      }
+
+      const today = new Date();
+      const weekStart = mondayOf(today);
+      const weekday = weekdayIndexOf(today);
+
+      const sale = await prisma.$transaction(async (tx) => {
+        let days = await getProductWeekDays(ownerId, weekStart, productId, tx);
+        const hasAnyData = days.some((d) => d.in > 0 || d.uza > 0 || d.jumla > 0 || d.baki > 0);
+        if (!hasAnyData) {
+          // Seed this week's opening stock from the latest saved Baki (carry-in).
+          days[0] = { ...days[0], in: available, jumla: available, baki: available };
+        }
+
+        days[weekday].uza += qty;
+        days = recomputeWeekDays(days);
+
+        await saveProductWeek(ownerId, weekStart, productId, days, tx);
+        await deriveSalesForWeek(ownerId, weekStart, tx);
+        await syncProductQuantities(ownerId, tx);
+
+        if (recordOrder) {
+          await createOrder(ownerId, tx);
+        }
+
+        const soldDate = new Date(weekStart);
+        soldDate.setDate(weekStart.getDate() + weekday);
+
+        const derived = await tx.sale.findFirst({
+          where: { owner_id: ownerId, product_id: productId, created_at: soldDate },
+        });
+
+        return {
+          id: derived?.id || '',
+          product_id: productId,
+          quantity: days[weekday].uza,
+          total_price: (Number(product.selling_price) || 0) * days[weekday].uza,
+          created_at: soldDate,
+        };
+      });
+
+      return sale;
     },
     saveStockSheet: async (_: any, { weekDate, entries }: any, context: any) => {
       const user = requireRole(context, 'owner', 'manager');
@@ -199,22 +236,27 @@ export const productResolvers = {
 
       const cleaned = (entries as any[]).filter((e) => validIds.has(e.productId));
 
-      const weekStart = new Date(weekDate);
-      weekStart.setHours(0, 0, 0, 0);
+      const weekStart = mondayOf(new Date(weekDate));
 
-      await stockRepository.upsertAll(
-        ownerId,
-        weekStart,
-        cleaned.map((e) => ({
-          productId: e.productId,
-          weekday: Math.min(6, Math.max(0, Math.floor(e.weekday || 0))),
-          in: Math.floor(e.in || 0),
-          jumla: Math.floor(e.jumla || 0),
-          uza: Math.floor(e.uza || 0),
-          baki: Math.floor(e.baki || 0),
-        })),
-        [...validIds],
-      );
+      await prisma.$transaction(async (tx) => {
+        await upsertWeekEntries(
+          ownerId,
+          weekStart,
+          cleaned.map((e) => ({
+            productId: e.productId,
+            weekday: Math.min(6, Math.max(0, Math.floor(e.weekday || 0))),
+            in: Math.floor(e.in || 0),
+            jumla: Math.floor(e.jumla || 0),
+            uza: Math.floor(e.uza || 0),
+            baki: Math.floor(e.baki || 0),
+          })),
+          [...validIds],
+          tx,
+        );
+
+        await deriveSalesForWeek(ownerId, weekStart, tx);
+        await syncProductQuantities(ownerId, tx);
+      });
 
       return true;
     }
