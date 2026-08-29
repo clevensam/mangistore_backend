@@ -22,6 +22,10 @@ const prisma = new PrismaClient({
   datasources: {
     db: { url: buildDatabaseUrl(process.env.DATABASE_URL) },
   },
+  transactionOptions: {
+    maxWait: 10000,
+    timeout: 30000,
+  },
 }).$extends({
   result: {
     product: {
