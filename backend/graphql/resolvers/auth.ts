@@ -7,7 +7,7 @@ import { requireAuth, requireRole } from '../../auth/context';
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-dev-secret';
 
 function generateToken(userId: string): string {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '30d' });
 }
 
 export const authResolvers = {
