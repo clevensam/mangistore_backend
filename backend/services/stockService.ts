@@ -122,23 +122,23 @@ export async function deriveSalesForWeek(ownerId: string, weekStart: Date, db: T
   }
 }
 
-// Sync products.quantity to the latest saved Baki per product (only changed rows).
+// Sync products.quantity to the latest saved Baki per product.
+// Uses a single bulk UPDATE (unnest) instead of one UPDATE per product, which
+// was N sequential round-trips over the Supabase pooler.
 export async function syncProductQuantities(ownerId: string, db: Tx = prisma): Promise<void> {
   const baki = await latestBakiMap(ownerId, db);
-  const products = await db.product.findMany({
-    where: { owner_id: ownerId },
-    select: { id: true, quantity: true },
-  });
+  const entries = Object.entries(baki);
+  if (!entries.length) return;
 
-  await Promise.all(
-    products.map((p: any) => {
-      if (baki[p.id] === undefined || Number(p.quantity) === baki[p.id]) return undefined;
-      return db.product.updateMany({
-        where: { id: p.id },
-        data: { quantity: baki[p.id] },
-      });
-    }),
-  );
+  const ids = entries.map(([id]) => id);
+  const quantities = entries.map(([, q]) => q);
+
+  await db.$executeRaw`
+    UPDATE products p
+    SET quantity = v.q
+    FROM (SELECT unnest(${ids}::text[]) AS id, unnest(${quantities}::int[]) AS q) v
+    WHERE p.id = v.id AND p.owner_id = ${ownerId}
+  `;
 }
 
 // Load the current week's sheet for a product as a 7-length array of DaySlots.
@@ -176,7 +176,7 @@ export function recomputeWeekDays(
   return next;
 }
 
-// Persist a product's full 7-day week to the sheet (creates missing rows).
+// Persist a product's full 7-day week to the sheet (bulk delete + createMany).
 export async function saveProductWeek(
   ownerId: string,
   weekStart: Date,
@@ -184,36 +184,22 @@ export async function saveProductWeek(
   days: Array<{ in: number; jumla: number; uza: number; baki: number }>,
   db: Tx = prisma,
 ): Promise<void> {
-  await Promise.all(
-    days.map((d, wd) =>
-      db.stockEntry.upsert({
-        where: {
-          owner_id_product_id_week_date_weekday: {
-            owner_id: ownerId,
-            product_id: productId,
-            week_date: weekStart,
-            weekday: wd,
-          },
-        },
-        create: {
-          owner_id: ownerId,
-          product_id: productId,
-          week_date: weekStart,
-          weekday: wd,
-          in: d.in,
-          jumla: d.jumla,
-          uza: d.uza,
-          baki: d.baki,
-        },
-        update: {
-          in: d.in,
-          jumla: d.jumla,
-          uza: d.uza,
-          baki: d.baki,
-        },
-      }),
-    ),
-  );
+  await db.stockEntry.deleteMany({
+    where: { owner_id: ownerId, week_date: weekStart, product_id: productId },
+  });
+
+  await db.stockEntry.createMany({
+    data: days.map((d, wd) => ({
+      owner_id: ownerId,
+      product_id: productId,
+      week_date: weekStart,
+      weekday: wd,
+      in: d.in,
+      jumla: d.jumla,
+      uza: d.uza,
+      baki: d.baki,
+    })),
+  });
 }
 
 // Record a POS checkout (an Order row). Returns its id.
@@ -243,42 +229,27 @@ export async function upsertWeekEntries(
   const week = new Date(weekStart);
   week.setHours(0, 0, 0, 0);
 
+  // Rebuild the whole week atomically with 2 bulk queries (delete + createMany)
+  // instead of one UPSERT round-trip per (product, weekday). Over the Supabase
+  // pooler, per-row upserts ran sequentially and blew past the transaction
+  // timeout. saveStockSheet always writes the full sheet, so deleting and
+  // recreating the entire week is correct (removed products are dropped too).
   await db.stockEntry.deleteMany({
-    where: {
-      owner_id: ownerId,
-      week_date: week,
-      product_id: { notIn: productIds.length ? productIds : ['__none__'] },
-    },
+    where: { owner_id: ownerId, week_date: week },
   });
 
-  await Promise.all(
-    entries.map((e) =>
-      db.stockEntry.upsert({
-        where: {
-          owner_id_product_id_week_date_weekday: {
-            owner_id: ownerId,
-            product_id: e.productId,
-            week_date: week,
-            weekday: e.weekday,
-          },
-        },
-        create: {
-          owner_id: ownerId,
-          product_id: e.productId,
-          week_date: week,
-          weekday: e.weekday,
-          in: e.in,
-          jumla: e.jumla,
-          uza: e.uza,
-          baki: e.baki,
-        },
-        update: {
-          in: e.in,
-          jumla: e.jumla,
-          uza: e.uza,
-          baki: e.baki,
-        },
-      }),
-    ),
-  );
+  if (entries.length) {
+    await db.stockEntry.createMany({
+      data: entries.map((e) => ({
+        owner_id: ownerId,
+        product_id: e.productId,
+        week_date: week,
+        weekday: e.weekday,
+        in: e.in,
+        jumla: e.jumla,
+        uza: e.uza,
+        baki: e.baki,
+      })),
+    });
+  }
 }
