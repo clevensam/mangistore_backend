@@ -50,7 +50,7 @@ const resolvers = {
 async function ensureSchema() {
   try {
     const tables = await prisma.$queryRaw<{ name: string }[]>`
-      SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'profiles'
+      SELECT tablename AS name FROM pg_tables WHERE schemaname = 'public' AND tablename = 'profiles'
     `;
     if (tables.length === 0) {
       console.log("Database schema missing — running prisma db push...");
