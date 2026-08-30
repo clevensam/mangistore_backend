@@ -1,130 +1,126 @@
 import { productRepository, saleRepository } from '../../repositories';
 import { requireAuth, getEffectiveOwnerId } from '../../auth/context';
 import prisma from '../../prisma';
+import { memoize } from '../../lib/cache';
 
 export const dashboardResolvers = {
   Query: {
     dashboardData: async (_: any, __: any, context: any) => {
       const user = requireAuth(context);
       const ownerId = await getEffectiveOwnerId(context);
-      const products = await productRepository.getAll(ownerId);
-      const sales = await saleRepository.getAll(ownerId);
 
-      const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
+      return memoize(`${ownerId}::dashboard`, async () => {
+        const products = await productRepository.getAll(ownerId);
+        const productMap = new Map<string, any>(products.map((p: any) => [p.id, p]));
 
-      const today = new Date().toISOString().split('T')[0];
-      const todayStart = new Date(today);
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date(today);
-      todayEnd.setHours(23, 59, 59, 999);
+        const todayStart = startOfToday();
+        const todayEnd = endOfToday();
 
-      const todaySales = sales.filter((s: any) => {
-        const saleDate = new Date(s.created_at);
-        return saleDate >= todayStart && saleDate <= todayEnd;
-      });
+        // Today's total revenue — computed in the DB (no full-table scan).
+        const todaySalesTotal = await saleRepository.sumTotalInRange(ownerId, todayStart, todayEnd);
 
-      const todaySalesTotal = todaySales.reduce((sum: number, s: any) => sum + s.total_price, 0);
-
-      // "Orders today" = number of POS checkouts recorded today (Order rows).
-      const todayOrderCount = await prisma.order.count({
-        where: { owner_id: ownerId, created_at: { gte: todayStart, lte: todayEnd } },
-      });
-
-      const lowStockCount = products.filter((p: any) => p.quantity <= p.low_stock_threshold && p.quantity > 0).length;
-
-      const inventoryValue = products.reduce((sum: number, p: any) => {
-        return sum + (p.buying_price || 0) * p.quantity;
-      }, 0);
-
-      const last7Days: { date: string; total: number }[] = [];
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split('T')[0];
-        const dayStart = new Date(dateStr);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(dateStr);
-        dayEnd.setHours(23, 59, 59, 999);
-
-        const daySales = sales.filter((s: any) => {
-          const saleDate = new Date(s.created_at);
-          return saleDate >= dayStart && saleDate <= dayEnd;
+        // "Orders today" = number of POS checkouts recorded today (Order rows).
+        const todayOrderCount = await prisma.order.count({
+          where: { owner_id: ownerId, created_at: { gte: todayStart, lte: todayEnd } },
         });
 
-        const dayTotal = daySales.reduce((sum: number, s: any) => sum + s.total_price, 0);
+        const lowStockCount = products.filter((p: any) => p.quantity <= p.low_stock_threshold && p.quantity > 0).length;
 
-        last7Days.push({
-          date: date.toLocaleDateString('en-US', { weekday: 'short' }),
-          total: dayTotal
-        });
-      }
+        const inventoryValue = products.reduce((sum: number, p: any) => {
+          return sum + (p.buying_price || 0) * p.quantity;
+        }, 0);
 
-      const last7DaysStart = new Date();
-      last7DaysStart.setDate(last7DaysStart.getDate() - 7);
-      last7DaysStart.setHours(0, 0, 0, 0);
+        // Last 7 days of sales — it is a bounded window, so we push a cheap
+        // aggregate to the DB rather than loading all of history into memory.
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        sevenDaysAgo.setHours(0, 0, 0, 0);
 
-      const recentPeriodSales = sales.filter((s: any) => new Date(s.created_at) >= last7DaysStart);
+        const weekSales = await saleRepository.getSummaryInRange(ownerId, sevenDaysAgo, new Date());
 
-      const productRevenue = new Map<string, { revenue: number; quantity: number; name: string }>();
+        const last7Days: { date: string; total: number }[] = [];
+        for (let i = 6; i >= 0; i--) {
+          const day = new Date();
+          day.setDate(day.getDate() - i);
+          const dayStart = startOfDay(day);
+          const dayEnd = endOfDay(day);
+          let dayTotal = 0;
+          for (const s of weekSales) {
+            const sd = new Date(s.created_at);
+            if (sd >= dayStart && sd <= dayEnd) dayTotal += Number(s.total_price);
+          }
+          last7Days.push({
+            date: day.toLocaleDateString('en-US', { weekday: 'short' }),
+            total: dayTotal,
+          });
+        }
 
-      recentPeriodSales.forEach((s: any) => {
-        const product = productMap.get(s.product_id);
-        if (!product) return;
+        // Top products by revenue in the last 7 days (DB groupBy).
+        const grouped = await saleRepository.groupByProduct(ownerId, sevenDaysAgo);
+        const topProducts = grouped
+          .map((g: any) => ({
+            productId: g.product_id,
+            productName: productMap.get(g.product_id)?.name || 'Unknown',
+            revenue: Number(g._sum?.total_price) || 0,
+            quantity: Number(g._sum?.quantity) || 0,
+          }))
+          .filter((p) => p.revenue > 0)
+          .sort((a, b) => b.revenue - a.revenue)
+          .slice(0, 5);
 
-        const existing = productRevenue.get(s.product_id) || { revenue: 0, quantity: 0, name: product.name };
-        existing.revenue += s.total_price;
-        existing.quantity += s.quantity;
-        productRevenue.set(s.product_id, existing);
+        const recentTransactions = (await saleRepository.getRecent(ownerId, 5)).map((s: any) => ({
+          id: s.id,
+          productId: s.product_id,
+          productName: s.product?.name || 'Unknown',
+          quantity: s.quantity,
+          totalPrice: s.total_price,
+          createdAt: s.created_at?.toISOString?.() || s.created_at,
+        }));
+
+        const lowStockProducts = products
+          .filter((p: any) => p.quantity <= p.low_stock_threshold && p.quantity > 0)
+          .map((p: any) => ({
+            productId: p.id,
+            productName: p.name,
+            quantity: p.quantity,
+            threshold: p.low_stock_threshold,
+            category: p.category || '',
+          }))
+          .slice(0, 5);
+
+        return {
+          stats: {
+            todaySales: todaySalesTotal,
+            todayOrderCount,
+            lowStockCount,
+            inventoryValue,
+          },
+          weeklySales: last7Days,
+          topProducts,
+          recentTransactions,
+          lowStockProducts,
+        };
       });
-
-      const topProducts = Array.from(productRevenue.entries())
-        .map(([productId, data]) => ({
-          productId,
-          productName: data.name,
-          revenue: data.revenue,
-          quantity: data.quantity
-        }))
-        .sort((a, b) => b.revenue - a.revenue)
-        .slice(0, 5);
-
-      const recentTransactions = sales
-        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 5)
-        .map((s: any) => {
-          const product = productMap.get(s.product_id);
-          return {
-            id: s.id,
-            productId: s.product_id,
-            productName: product?.name || 'Unknown',
-            quantity: s.quantity,
-            totalPrice: s.total_price,
-            createdAt: s.created_at?.toISOString?.() || s.created_at
-          };
-        });
-
-      const lowStockProducts = products
-        .filter((p: any) => p.quantity <= p.low_stock_threshold && p.quantity > 0)
-        .map((p: any) => ({
-          productId: p.id,
-          productName: p.name,
-          quantity: p.quantity,
-          threshold: p.low_stock_threshold,
-          category: p.category || ''
-        }))
-        .slice(0, 5);
-
-      return {
-        stats: {
-          todaySales: todaySalesTotal,
-          todayOrderCount,
-          lowStockCount,
-          inventoryValue
-        },
-        weeklySales: last7Days,
-        topProducts,
-        recentTransactions,
-        lowStockProducts
-      };
-    }
-  }
+    },
+  },
 };
+
+function startOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function endOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(23, 59, 59, 999);
+  return x;
+}
+
+function startOfToday(): Date {
+  return startOfDay(new Date());
+}
+
+function endOfToday(): Date {
+  return endOfDay(new Date());
+}

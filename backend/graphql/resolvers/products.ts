@@ -1,6 +1,7 @@
 import prisma from '../../prisma';
 import { productRepository, saleRepository, stockRepository } from '../../repositories';
 import { requireAuth, requireRole, getEffectiveOwnerId } from '../../auth/context';
+import { invalidateOwner } from '../../lib/cache';
 import {
   mondayOf,
   weekdayIndexOf,
@@ -8,9 +9,9 @@ import {
   syncProductQuantities,
   getProductWeekDays,
   recomputeWeekDays,
-  saveProductWeek,
+  saveProductWeekSuffix,
   createOrder,
-  upsertWeekEntries,
+  rebuildWeekFromInputs,
 } from '../../services/stockService';
 
 export const productResolvers = {
@@ -193,16 +194,20 @@ export const productResolvers = {
       const sale = await prisma.$transaction(async (tx) => {
         let days = await getProductWeekDays(ownerId, weekStart, productId, tx);
         const hasAnyData = days.some((d) => d.in > 0 || d.uza > 0 || d.jumla > 0 || d.baki > 0);
+        let fromIndex = weekday;
         if (!hasAnyData) {
           // Seed this week's opening stock from the latest saved Baki (carry-in).
           days[0] = { ...days[0], in: available, jumla: available, baki: available };
+          // Seeding changed day 0 as well, so persist from the start.
+          fromIndex = 0;
         }
 
         days[weekday].uza += qty;
         days = recomputeWeekDays(days);
 
-        // Persist the product's week sheet (bulk delete + createMany).
-        await saveProductWeek(ownerId, weekStart, productId, days, tx);
+        // Persist only the days that actually changed (the cascade writes from
+        // `fromIndex` onward) instead of deleting/recreating all 7 rows.
+        await saveProductWeekSuffix(ownerId, weekStart, productId, fromIndex, days, tx);
 
         const soldDate = new Date(weekStart);
         soldDate.setDate(weekStart.getDate() + weekday);
@@ -247,6 +252,7 @@ export const productResolvers = {
         };
       });
 
+      invalidateOwner(ownerId);
       return sale;
     },
     saveStockSheet: async (_: any, { weekDate, entries }: any, context: any) => {
@@ -260,17 +266,17 @@ export const productResolvers = {
 
       const weekStart = mondayOf(new Date(weekDate));
 
-      await prisma.$transaction(async (tx) => {
-        await upsertWeekEntries(
+      // The frontend only sends raw `in`/`uza` values; the backend recomputes
+      // jumla/baki (single source of truth) and returns the canonical week.
+      const rebuilt = await prisma.$transaction(async (tx) => {
+        const weekRows = await rebuildWeekFromInputs(
           ownerId,
           weekStart,
           cleaned.map((e) => ({
             productId: e.productId,
             weekday: Math.min(6, Math.max(0, Math.floor(e.weekday || 0))),
             in: Math.floor(e.in || 0),
-            jumla: Math.floor(e.jumla || 0),
             uza: Math.floor(e.uza || 0),
-            baki: Math.floor(e.baki || 0),
           })),
           [...validIds],
           tx,
@@ -278,9 +284,21 @@ export const productResolvers = {
 
         await deriveSalesForWeek(ownerId, weekStart, tx);
         await syncProductQuantities(ownerId, tx);
+
+        return weekRows;
       });
 
-      return true;
+      invalidateOwner(ownerId);
+
+      return rebuilt.map((e) => ({
+        id: `${e.productId}:${e.weekday}`,
+        productId: e.productId,
+        weekday: e.weekday,
+        in: e.in,
+        jumla: e.jumla,
+        uza: e.uza,
+        baki: e.baki,
+      }));
     }
   }
 };

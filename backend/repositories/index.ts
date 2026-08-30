@@ -88,6 +88,80 @@ export class SaleRepository {
     });
   }
 
+  // Aggregate total revenue + count within a range (SQL aggregate).
+  async getRangeAggregate(ownerId: string, start: Date, end: Date) {
+    return prisma.sale.aggregate({
+      where: {
+        owner_id: ownerId,
+        created_at: { gte: start, lte: end },
+      },
+      _sum: { total_price: true },
+      _count: { _all: true },
+    });
+  }
+
+  // Latest sale row for a single product (for "days since last sale").
+  async getLastSaleByProduct(productId: string, ownerId: string) {
+    return prisma.sale.findMany({
+      where: { product_id: productId, owner_id: ownerId },
+      orderBy: { created_at: 'desc' },
+      take: 1,
+      select: { created_at: true },
+    });
+  }
+
+  // Sum of total_price within a range — done in the DB, not in JS.
+  async sumTotalInRange(ownerId: string, start: Date, end: Date): Promise<number> {
+    const result = await prisma.sale.aggregate({
+      where: {
+        owner_id: ownerId,
+        created_at: { gte: start, lte: end },
+      },
+      _sum: { total_price: true },
+      _count: { _all: true },
+    });
+    return Number(result._sum.total_price) || 0;
+  }
+
+  // Small projection of sales within a range (only columns needed for grouping).
+  async getSummaryInRange(ownerId: string, start: Date, end: Date) {
+    return prisma.sale.findMany({
+      where: {
+        owner_id: ownerId,
+        created_at: { gte: start, lte: end },
+      },
+      select: {
+        id: true,
+        product_id: true,
+        quantity: true,
+        total_price: true,
+        created_at: true,
+      },
+    });
+  }
+
+  // Aggregate total revenue + quantity per product within a range (SQL groupBy).
+  async groupByProduct(ownerId: string, start: Date, end?: Date) {
+    return prisma.sale.groupBy({
+      by: ['product_id'],
+      where: {
+        owner_id: ownerId,
+        created_at: { gte: start, ...(end ? { lte: end } : {}) },
+      },
+      _sum: { total_price: true, quantity: true },
+    });
+  }
+
+  // Latest sales (recent transactions) with product name.
+  async getRecent(ownerId: string, take = 5) {
+    return prisma.sale.findMany({
+      where: { owner_id: ownerId },
+      orderBy: { created_at: 'desc' },
+      take,
+      include: { product: { select: { name: true } } },
+    });
+  }
+
   async getByProductId(productId: string, ownerId: string) {
     return prisma.sale.findMany({
       where: { product_id: productId, owner_id: ownerId },
