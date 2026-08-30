@@ -180,7 +180,7 @@ export const productTypeDefs = `#graphql
     updateProduct(id: ID!, name: String, category: String, buying_price: Float, selling_price: Float, quantity: Int, low_stock_threshold: Int): Product
     deleteProduct(id: ID!): Boolean!
     recordSale(productId: ID!, quantity: Int!, totalPrice: Float!, recordOrder: Boolean = false): Sale!
-    saveStockSheet(weekDate: String!, entries: [StockEntryInput!]!): Boolean!
+    saveStockSheet(weekDate: String!, entries: [StockEntryInput!]!): [StockEntry!]!
   }
 `;
 

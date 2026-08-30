@@ -202,54 +202,127 @@ export async function saveProductWeek(
   });
 }
 
+// Persist only the changed suffix of a product's week (days `fromIndex..6`).
+// Used by recordSale where `recomputeWeekDays` only mutates days at and after
+// the day being edited — so the earlier, untouched days can stay as-is. This
+// avoids deleting/recreating the entire 7-row week on every sale.
+export async function saveProductWeekSuffix(
+  ownerId: string,
+  weekStart: Date,
+  productId: string,
+  fromIndex: number,
+  days: Array<{ in: number; jumla: number; uza: number; baki: number }>,
+  db: Tx = prisma,
+): Promise<void> {
+  const from = Math.min(6, Math.max(0, Math.floor(fromIndex)));
+  for (let wd = from; wd < 7; wd++) {
+    const d = days[wd];
+    await db.stockEntry.upsert({
+      where: {
+        owner_id_product_id_week_date_weekday: {
+          owner_id: ownerId,
+          product_id: productId,
+          week_date: weekStart,
+          weekday: wd,
+        },
+      },
+      create: {
+        owner_id: ownerId,
+        product_id: productId,
+        week_date: weekStart,
+        weekday: wd,
+        in: d.in,
+        jumla: d.jumla,
+        uza: d.uza,
+        baki: d.baki,
+      },
+      update: {
+        in: d.in,
+        jumla: d.jumla,
+        uza: d.uza,
+        baki: d.baki,
+      },
+    });
+  }
+}
+
 // Record a POS checkout (an Order row). Returns its id.
 export async function createOrder(ownerId: string, db: Tx = prisma): Promise<string> {
   const order = await db.order.create({ data: { owner_id: ownerId } });
   return order.id;
 }
 
-// Persist a full week of entries (report save) within the given client.
-// Removes saved entries for products no longer present.
-export interface WeekEntryInput {
+// Build the canonical 7-day cascade for a product from raw inputs.
+// The cascade (jumla/baki) is ALWAYS derived server-side from `in` and `uza`,
+// so there is a single source of truth for the stock-sheet math.
+export function buildWeekFromInputs(
+  inByDay: number[],
+  uzaByDay: number[],
+): Array<{ in: number; jumla: number; uza: number; baki: number }> {
+  const days: Array<{ in: number; jumla: number; uza: number; baki: number }> = [];
+  for (let i = 0; i < 7; i++) {
+    days.push({ in: inByDay[i] || 0, jumla: 0, uza: uzaByDay[i] || 0, baki: 0 });
+  }
+  return recomputeWeekDays(days);
+}
+
+// Persist the canonical week and return the recomputed entries for a week.
+export async function rebuildWeekFromInputs(
+  ownerId: string,
+  weekStart: Date,
+  entries: Array<{ productId: string; weekday: number; in: number; uza: number }>,
+  validIds: string[],
+  db: Tx = prisma,
+): Promise<Array<{
   productId: string;
   weekday: number;
   in: number;
   jumla: number;
   uza: number;
   baki: number;
-}
-
-export async function upsertWeekEntries(
-  ownerId: string,
-  weekStart: Date,
-  entries: WeekEntryInput[],
-  productIds: string[],
-  db: Tx = prisma,
-): Promise<void> {
+}>> {
   const week = new Date(weekStart);
   week.setHours(0, 0, 0, 0);
 
-  // Rebuild the whole week atomically with 2 bulk queries (delete + createMany)
-  // instead of one UPSERT round-trip per (product, weekday). Over the Supabase
-  // pooler, per-row upserts ran sequentially and blew past the transaction
-  // timeout. saveStockSheet always writes the full sheet, so deleting and
-  // recreating the entire week is correct (removed products are dropped too).
+  // Group raw inputs per product.
+  const byProduct = new Map<string, { inByDay: number[]; uzaByDay: number[] }>();
+  for (const e of entries) {
+    if (!byProduct.has(e.productId)) {
+      byProduct.set(e.productId, { inByDay: new Array(7).fill(0), uzaByDay: new Array(7).fill(0) });
+    }
+    const p = byProduct.get(e.productId)!;
+    const wd = Math.min(6, Math.max(0, Math.floor(e.weekday || 0)));
+    p.inByDay[wd] = Math.floor(e.in || 0);
+    p.uzaByDay[wd] = Math.floor(e.uza || 0);
+  }
+
+  const result: Array<{ productId: string; weekday: number; in: number; jumla: number; uza: number; baki: number }> = [];
+
+  const data: Array<{ owner_id: string; product_id: string; week_date: Date; weekday: number; in: number; jumla: number; uza: number; baki: number }> = [];
+  for (const [productId, { inByDay, uzaByDay }] of byProduct) {
+    const days = buildWeekFromInputs(inByDay, uzaByDay);
+    days.forEach((d, wd) => {
+      data.push({
+        owner_id: ownerId,
+        product_id: productId,
+        week_date: week,
+        weekday: wd,
+        in: d.in,
+        jumla: d.jumla,
+        uza: d.uza,
+        baki: d.baki,
+      });
+      result.push({ productId, weekday: wd, in: d.in, jumla: d.jumla, uza: d.uza, baki: d.baki });
+    });
+  }
+
+  // Rebuild the whole week atomically (delete + createMany).
   await db.stockEntry.deleteMany({
     where: { owner_id: ownerId, week_date: week },
   });
-
-  if (entries.length) {
-    await db.stockEntry.createMany({
-      data: entries.map((e) => ({
-        owner_id: ownerId,
-        product_id: e.productId,
-        week_date: week,
-        weekday: e.weekday,
-        in: e.in,
-        jumla: e.jumla,
-        uza: e.uza,
-        baki: e.baki,
-      })),
-    });
+  if (data.length) {
+    await db.stockEntry.createMany({ data });
   }
+
+  return result;
 }
