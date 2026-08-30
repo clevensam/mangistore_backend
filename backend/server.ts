@@ -18,6 +18,7 @@ import { dashboardResolvers } from "./graphql/resolvers/dashboard";
 import { createContext } from "./auth/context";
 import { verifyEmailConfig } from "./services/email";
 import { errorHandler } from "./middleware/errorHandler";
+import { aiRouter } from "./routes/ai";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -95,6 +96,8 @@ async function startServer() {
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", message: "Server is running with GraphQL API" });
   });
+
+  app.use("/api/ai", bodyParser.json(), aiRouter);
 
   app.use(errorHandler);
 

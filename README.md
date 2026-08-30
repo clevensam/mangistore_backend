@@ -36,6 +36,11 @@ npm run dev
 - `GET /api/health` - Health check
 - `POST /api/auth/logout` - Logout
 - `POST /graphql` - GraphQL endpoint
+- `POST /api/ai/generate` - Authenticated Gemini proxy (body: `{ prompt, model? }`)
+- `POST /api/ai/chat` - Authenticated Gemini proxy (body: `{ messages: [{role, text}], model? }`)
+
+The `/api/ai/*` routes require the JWT (`Authorization: Bearer <token>`). They keep
+`GEMINI_API_KEY` on the server — never expose it to the browser.
 
 ## Development
 
